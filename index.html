@@ -258,7 +258,7 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
       <div class="ctl">开门 —— 走近房门会出现按钮</div>
       <div class="ctl">楼层 —— 站上楼梯口发光踏板</div>
     </div>
-    <div class="menu-foot">NIGHT SHIFT AT THE ASYLUM · v1.0</div>
+    <div class="menu-foot">NIGHT SHIFT AT THE ASYLUM · V1.1</div>
   </div>
 </div>
 
@@ -1888,17 +1888,16 @@ function resolveDoors(pos, radius, floor){
   }
 }
 function nearestDoor(){
-  var best = null, bestD = 3.2;
+  /* 按到门框的距离判定：正对/背对/侧身都能交互 */
+  var best = null, bestD = 2.3;
   for(var i=0;i<doors.length;i++){
     var d = doors[i];
     if(d.floor !== currentFloor) continue;
-    var cx = (d.minX + d.maxX)/2, cz = (d.minZ + d.maxZ)/2;
+    var cx = clamp(player.pos.x, d.minX, d.maxX);
+    var cz = clamp(player.pos.z, d.minZ, d.maxZ);
     var dx = player.pos.x - cx, dz = player.pos.z - cz;
-    var dist = dx*dx + dz*dz;
-    if(dist < bestD){
-      var looking = -(cameraDir.x*d.nx + cameraDir.z*d.nz) > 0.35;
-      if(looking){ best = d; bestD = dist; }
-    }
+    var dist = Math.sqrt(dx*dx + dz*dz);
+    if(dist < bestD){ bestD = dist; best = d; }
   }
   return best;
 }
@@ -1994,7 +1993,10 @@ gunGroup.position.set(0.24,-0.22,-0.5);
 var muzzle = new THREE.Mesh(new THREE.PlaneGeometry(0.18,0.18), new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:0}));
 muzzle.position.set(0,0.02,-0.32); gunGroup.add(muzzle);
 var gunBasePos = gunGroup.position.clone();
+var gunBaseRot = gunGroup.rotation.clone();
 var recoil = 0;
+var rampTrack = { id:-1, t0:0 }, rampCooldown = 0;
+var magDrops = [];
 
 function buildGunModel(idx){
   while(gunGroup.children.length>1) gunGroup.remove(gunGroup.children[gunGroup.children.length-1]);
@@ -2471,7 +2473,33 @@ function startReload(){
   var w = curWeapon(), s = curSlot();
   if(player.reloading || s.mag>=w.magSize) return;
   player.reloading = true; player.reloadT = w.reloadT;
+  player.reloadDur = w.reloadT; player.magDropped = false;
   AudioSys.reload();
+}
+/* 换弹时掉落的弹匣 */
+function dropMagazine(){
+  var m = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,0.032),
+    new THREE.MeshStandardMaterial({color:0x2b2f36, roughness:0.5, metalness:0.65}));
+  var wv = new THREE.Vector3();
+  gunGroup.getWorldPosition(wv);
+  m.position.copy(wv);
+  m.position.y -= 0.05;
+  scene.add(m);
+  magDrops.push({m:m, vy:0.35, vx:rand(-0.35,0.35), vz:rand(-0.35,0.35), life:2.4});
+}
+function updateMagDrops(dt){
+  for(var i=magDrops.length-1;i>=0;i--){
+    var p = magDrops[i];
+    p.vy -= dt*9.8;
+    p.m.position.y += p.vy*dt;
+    p.m.position.x += p.vx*dt;
+    p.m.position.z += p.vz*dt;
+    p.m.rotation.x += dt*7; p.m.rotation.z += dt*5;
+    p.life -= dt;
+    if(p.life <= 0 || p.m.position.y < floorY(currentFloor)+0.03){
+      scene.remove(p.m); magDrops.splice(i,1);
+    }
+  }
 }
 function cycleWeapon(){
   var n = player.unlocked.length; if(n<=1) return;
@@ -2624,6 +2652,9 @@ function resetGame(){
   notes.length = 0;
   stats.kills = 0; stats.pickups = 0; stats.notes = 0;
   flashCharge = 1;
+  for(var md=magDrops.length-1;md>=0;md--){ scene.remove(magDrops[md].m); }
+  magDrops.length = 0;
+  rampCooldown = 0; rampTrack.id = -1;
   currentFloor = 0;
   player.pos.set(0, floorY(0), 0); player.yaw=-Math.PI/2; player.pitch=0;
   player.hp=player.maxHp; elapsed=0; gameOver=false; started=true;
@@ -2732,30 +2763,47 @@ function updateInner(dt){
   /* --- 门动画 --- */
   updateDoors(dt);
   /* --- 真实楼梯（沿斜面行走，跨层无缝） --- */
-  var ramp = null;
+  if(rampCooldown > 0) rampCooldown -= dt;
+  var ramp = null, rampIdx = -1;
   for(var ri=0; ri<stairsRamps.length; ri++){
     var rp = stairsRamps[ri];
     var inRamp = (rp.axis === 'z')
       ? (player.pos.x >= rp.x0 && player.pos.x <= rp.x1 && player.pos.z >= Math.min(rp.z0,rp.z1) && player.pos.z <= Math.max(rp.z0,rp.z1))
       : (player.pos.z >= rp.z0 && player.pos.z <= rp.z1 && player.pos.x >= Math.min(rp.x0,rp.x1) && player.pos.x <= Math.max(rp.x0,rp.x1));
-    if(inRamp){ ramp = rp; break; }
+    if(!inRamp) continue;
+    /* 必须真的站在这段楼梯的高度上（防止在天台隔着楼梯房误触） */
+    var tTest = clamp(rp.axis === 'z'
+      ? (rp.z0 - player.pos.z)/(rp.z0 - rp.z1)
+      : (rp.x0 - player.pos.x)/(rp.x0 - rp.x1), 0, 1);
+    var yTest = rp.y0 + (rp.y1 - rp.y0)*tTest;
+    if(Math.abs(player.pos.y - yTest) > 1.0) continue;
+    ramp = rp; rampIdx = ri; break;
   }
   if(ramp){
     var tR = clamp(ramp.axis === 'z'
       ? (ramp.z0 - player.pos.z)/(ramp.z0 - ramp.z1)
       : (ramp.x0 - player.pos.x)/(ramp.x0 - ramp.x1), 0, 1);
     player.pos.y = ramp.y0 + (ramp.y1 - ramp.y0)*tR;
-    if(tR >= 0.985 && currentFloor !== ramp.upper){
-      currentFloor = ramp.upper;
-      applyFloorVisuals(); AudioSys.stairs();
-      showMsg('来到 ' + FLOOR_NAMES[currentFloor], 2);
-    } else if(tR <= 0.015 && currentFloor !== ramp.lower){
-      currentFloor = ramp.lower;
-      applyFloorVisuals(); AudioSys.stairs();
-      showMsg('回到 ' + FLOOR_NAMES[currentFloor], 2);
+    if(rampTrack.id !== rampIdx){ rampTrack.id = rampIdx; rampTrack.t0 = tR; }
+    if(rampCooldown <= 0){
+      /* 必须从另一端走上来/走下去（走完全程）才切层 */
+      if(tR >= 0.985 && currentFloor !== ramp.upper && rampTrack.t0 < 0.7){
+        currentFloor = ramp.upper;
+        applyFloorVisuals(); AudioSys.stairs();
+        showMsg('来到 ' + FLOOR_NAMES[currentFloor], 2);
+        rampCooldown = 1.5; rampTrack.id = -1;
+        player.pos.y = floorY(currentFloor);
+      } else if(tR <= 0.015 && currentFloor !== ramp.lower && rampTrack.t0 > 0.3){
+        currentFloor = ramp.lower;
+        applyFloorVisuals(); AudioSys.stairs();
+        showMsg('回到 ' + FLOOR_NAMES[currentFloor], 2);
+        rampCooldown = 1.5; rampTrack.id = -1;
+        player.pos.y = floorY(currentFloor);
+      }
     }
   } else {
     player.pos.y = floorY(currentFloor);
+    rampTrack.id = -1;
   }
 
   /* --- 相机 --- */
@@ -2779,13 +2827,24 @@ function updateInner(dt){
   if(player.firing && !gameOver) fire();
 
   /* --- 后坐力 & 枪口火焰 --- */
+  gunGroup.position.copy(gunBasePos);
+  gunGroup.rotation.set(gunBaseRot.x, gunBaseRot.y, gunBaseRot.z);
   if(recoil>0){
     recoil = Math.max(0, recoil - dt*8);
     gunGroup.position.z = gunBasePos.z + recoil*0.12;
     gunGroup.position.y = gunBasePos.y + recoil*0.03;
-  } else {
-    gunGroup.position.copy(gunBasePos);
   }
+  /* --- 换弹动画：压枪下沉 + 侧倾 + 退弹匣 + 回位 --- */
+  if(player.reloading && player.reloadDur > 0){
+    var rprog = clamp(1 - player.reloadT/player.reloadDur, 0, 1);
+    var ra = Math.sin(rprog*Math.PI);
+    gunGroup.position.y -= ra*0.19;
+    gunGroup.position.z += ra*0.05;
+    gunGroup.rotation.x = gunBaseRot.x - ra*0.95;
+    gunGroup.rotation.z = gunBaseRot.z + ra*0.30;
+    if(!player.magDropped && rprog > 0.22){ player.magDropped = true; dropMagazine(); }
+  }
+  updateMagDrops(dt);
   /* --- 武器摆动（呼吸/步伐） --- */
   weaponSway = clamp(weaponSway + (moving ? dt*2.5 : -dt*2.5), 0.25, 1);
   var swayT = elapsed*2.1;
@@ -3140,7 +3199,7 @@ function render(){
   if(fpsTime >= 1){
     fpsAvg = fpsFrames/fpsTime; fpsFrames = 0; fpsTime = 0;
     if(elFps){
-      elFps.textContent = 'v22 ' + Math.round(fpsAvg) + 'fps 帧' + frameCount + ' ' + Math.floor(elapsed) + 's 怪' + monsters.length + ' 档' + qualityLevel + (contextLost ? ' 上下文丢失' : '') + (lastErrMsg ? (' 错:' + lastErrMsg) : '');
+      elFps.textContent = 'V1.1 ' + Math.round(fpsAvg) + 'fps 帧' + frameCount + ' ' + Math.floor(elapsed) + 's 怪' + monsters.length + ' 档' + qualityLevel + (contextLost ? ' 上下文丢失' : '') + (lastErrMsg ? (' 错:' + lastErrMsg) : '');
     }
     if(fpsAvg < 22){ lowFpsFor += 1; highFpsFor = 0; }
     else if(fpsAvg > 48){ highFpsFor += 1; lowFpsFor = Math.max(0, lowFpsFor-1); }
