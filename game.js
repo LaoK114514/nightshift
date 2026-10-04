@@ -91,6 +91,7 @@ var AudioSys = {
   door(){ this.noise(0.4, 0.12, 900, 'bandpass'); this.tone(85, 0.5, 'sawtooth', 0.1, 60); this.tone(140, 0.3, 'square', 0.05, 90); },
   heal(){ this.tone(520,0.12,'sine',0.2); this.tone(780,0.18,'sine',0.18); this.tone(1040,0.24,'sine',0.12); },
   bang(){ this.noise(0.09, 0.32, 500); this.tone(70, 0.09, 'square', 0.22, 45); },
+  crossbow(){ this.tone(190, 0.07, 'square', 0.16, 110); this.noise(0.06, 0.12, 800, 'lowpass'); },
   heartbeat(){ this.tone(55,0.12,'sine',0.5,38); },
   stairs(){ this.tone(220,0.25,'sine',0.18, 160); this.tone(330,0.3,'sine',0.12, 240); }
 };
@@ -1725,8 +1726,9 @@ function updateParticles(dt){
 var WEAPONS = [
   {name:'手枪',   magSize:12, dmg:34, pellets:1, spread:0.012, rate:0.32, reloadT:1.4, auto:false},
   {name:'霰弹枪', magSize:6,  dmg:22, pellets:8, spread:0.055, rate:0.9, reloadT:2.2, auto:false},
-  {name:'冲锋枪', magSize:30, dmg:12, pellets:1, spread:0.032, rate:0.085, reloadT:1.8, auto:true},
-  {name:'狙击枪', magSize:5,  dmg:150, pellets:1, spread:0.001, rate:1.4, reloadT:2.8, auto:false}
+  {name:'冲锋枪', magSize:30, dmg:18, pellets:1, spread:0.032, rate:0.085, reloadT:1.8, auto:true},
+  {name:'狙击枪', magSize:5,  dmg:150, pellets:1, spread:0.001, rate:1.4, reloadT:2.8, auto:false},
+  {name:'十字弩', magSize:1,  dmg:120, pellets:1, spread:0.004, rate:1.1, reloadT:2.4, auto:false, silent:true}
 ];
 var player = {
   pos:new THREE.Vector3(0,0,0), yaw:Math.PI, pitch:0,
@@ -1812,6 +1814,21 @@ function buildGunModel(idx){
     var rtg = new THREE.Mesh(new THREE.BoxGeometry(0.02,0.045,0.01), darkMat); rtg.position.set(0,-0.02,0.09); g.add(rtg);
     var rbip = new THREE.Mesh(cy(0.008,0.008,0.26,6), darkMat); rbip.position.set(0,-0.1,-0.5); rbip.rotation.z=0.18; g.add(rbip);
     addHand(g, -0.005, -0.05, -0.05);
+  } else if(idx===4){
+    /* 十字弩：弩臂 + 木托 + 箭槽 + 弓弦 + 短瞄具 */
+    var cStock = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.062,0.42), woodMat); cStock.position.set(0,0.01,0.12); g.add(cStock);
+    var cButt = new THREE.Mesh(new THREE.BoxGeometry(0.056,0.1,0.05), darkMat); cButt.position.set(0,-0.02,0.34); g.add(cButt);
+    var cRiser = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.22), darkMat); cRiser.position.set(0,0.035,-0.12); g.add(cRiser);
+    var cLimb = new THREE.Mesh(new THREE.BoxGeometry(0.64,0.022,0.045), metalMat); cLimb.position.set(0,0.048,-0.25); g.add(cLimb);
+    var cTipL = new THREE.Mesh(new THREE.BoxGeometry(0.055,0.022,0.045), darkMat); cTipL.position.set(-0.31,0.048,-0.23); cTipL.rotation.y = 0.55; g.add(cTipL);
+    var cTipR = cTipL.clone(); cTipR.position.x = 0.31; cTipR.rotation.y = -0.55; g.add(cTipR);
+    var cString = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.006,0.006), new THREE.MeshBasicMaterial({color:0xd8d2c4})); cString.position.set(0,0.048,-0.17); g.add(cString);
+    var cBolt = new THREE.Mesh(cy(0.008,0.008,0.42,6), darkMat); cBolt.rotation.x = Math.PI/2; cBolt.position.set(0,0.052,-0.27); g.add(cBolt);
+    var cHead = new THREE.Mesh(new THREE.ConeGeometry(0.019,0.055,6), metalMat); cHead.rotation.x = -Math.PI/2; cHead.position.set(0,0.052,-0.5); g.add(cHead);
+    var cGrip = new THREE.Mesh(new THREE.BoxGeometry(0.042,0.1,0.05), darkMat); cGrip.position.set(0,-0.058,0.04); cGrip.rotation.x = 0.25; g.add(cGrip);
+    var cTrig = new THREE.Mesh(new THREE.BoxGeometry(0.014,0.035,0.01), metalMat); cTrig.position.set(0,-0.014,0.05); g.add(cTrig);
+    var cSide = new THREE.Mesh(cy(0.016,0.016,0.1,8), darkMat); cSide.rotation.x = Math.PI/2; cSide.position.set(0,0.088,-0.04); g.add(cSide);
+    addHand(g, -0.005, -0.048, -0.02);
   } else {
     var recv2 = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.08,0.32), metalMat); recv2.position.set(0,0.03,0); g.add(recv2);
     var b3 = new THREE.Mesh(cy(0.015,0.015,0.17,8), metalMat); b3.rotation.x=Math.PI/2; b3.position.set(0,0.035,-0.21); g.add(b3);
@@ -2447,9 +2464,14 @@ function fire(){
   if(!(dev.on && dev.infAmmo)) s.mag--;
   player.fireCd = w.rate;
   recoil = 1;
-  muzzle.material.opacity = 1; muzzle.rotation.z = rand(0,6.28);
-  AudioSys.gunshot(w.pellets>1?1.5:1);
-  noisePulse = Math.max(noisePulse, w.pellets>1 ? 2.6 : 1.8);   /* 枪声会把盲眼修女引过来 */
+  if(w.silent){
+    /* 十字弩：静音，不惊动盲眼修女，也没有枪口火焰 */
+    AudioSys.crossbow();
+  } else {
+    muzzle.material.opacity = 1; muzzle.rotation.z = rand(0,6.28);
+    AudioSys.gunshot(w.pellets>1?1.5:1);
+    noisePulse = Math.max(noisePulse, w.pellets>1 ? 2.6 : 1.8);   /* 枪声会把盲眼修女引过来 */
+  }
   cameraShake = Math.min(cameraShake + (w.pellets>1?0.09:0.05), 0.2);
 
   var origin = camera.position.clone();
@@ -2684,6 +2706,7 @@ function resetGame(){
   spawnPickup(1, 5.1, -19.5, 0);   // 1F 安保室（支廊东侧）
   spawnPickup(2, 5.1, -13.5, 1);   // 2F 药库（支廊东侧）
   spawnPickup(3, -14.5, -6, 2);    // 3F 天台楼梯房旁（狙击枪）
+  spawnPickup(4, 5.1, -7.5, 0);    // 1F 储物间（十字弩）
   spawnSedative(8.5, 3.4, 0);      // 1F 病房C
   spawnSedative(-8.5, -13.5, 1);   // 2F 病房H
   spawnSedative(12.5, 5.1, 2);     // 3F 天台东侧
