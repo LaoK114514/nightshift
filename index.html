@@ -33,6 +33,46 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #threat.bad { color:#c25a4a; }
 .rbtn.active { border-color:#c9a13a; background:rgba(201,161,58,0.20); }
 
+/* --- 开发者模式 --- */
+.dev-hide { display:none !important; }
+.dev-overlay {
+  position:fixed; inset:0; z-index:200; background:rgba(3,4,6,0.9);
+  display:flex; align-items:center; justify-content:center; padding:20px;
+}
+.dev-box {
+  width:min(420px, 92vw); max-height:86vh; overflow-y:auto;
+  background:linear-gradient(180deg, rgba(14,15,18,0.98), rgba(8,9,11,0.98));
+  border:1px solid rgba(222,217,204,0.22); padding:26px 22px 20px;
+  text-align:center; box-shadow:0 0 40px rgba(0,0,0,0.7);
+}
+.dev-box.wide { width:min(620px, 94vw); }
+#devpass { align-items:flex-start; padding-top:12vh; }
+.dev-title { font-size:15px; letter-spacing:0.42em; text-indent:0.42em; color:#e6e1d4; font-weight:300; }
+.dev-sub { font-size:10px; letter-spacing:0.2em; color:#7d786c; margin:12px 0 18px; }
+.dev-input {
+  width:100%; box-sizing:border-box; background:rgba(255,255,255,0.04);
+  border:1px solid rgba(222,217,204,0.24); color:#e6e1d4; font-family:inherit;
+  font-size:15px; letter-spacing:0.34em; text-align:center; padding:12px 10px; outline:none;
+}
+.dev-input:focus { border-color:#9c342c; }
+.dev-msg { font-size:11px; letter-spacing:0.2em; color:#c25a4a; height:20px; margin-top:10px; }
+.dev-btns { display:flex; gap:12px; justify-content:center; margin-top:6px; }
+.dev-btn {
+  flex:1; max-width:190px; padding:11px 8px; background:transparent; font-family:inherit;
+  border:1px solid rgba(222,217,204,0.24); color:#ded9cc;
+  font-size:12px; letter-spacing:0.3em; text-indent:0.3em; cursor:pointer;
+}
+.dev-btn:active { border-color:#9c342c; background:rgba(156,52,44,0.16); }
+.dev-btn.primary { border-color:rgba(222,217,204,0.45); }
+.dev-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:9px; margin-bottom:18px; }
+.dev-toggle {
+  padding:12px 6px; background:transparent; font-family:inherit;
+  border:1px solid rgba(222,217,204,0.18); color:#a39d8e;
+  font-size:11px; letter-spacing:0.16em; cursor:pointer;
+}
+.dev-toggle.on { border-color:#c9a13a; background:rgba(201,161,58,0.16); color:#e8dfc0; }
+.dev-toggle:active { border-color:#9c342c; }
+
 /* --- 顶部中间：时间 --- */
 #topmid { position:absolute; top:20px; left:50%; transform:translateX(-50%); text-align:center; }
 #time { font-size:24px; letter-spacing:0.32em; text-indent:0.32em; color:#e6e1d4; font-weight:300; font-variant-numeric:tabular-nums; }
@@ -323,6 +363,31 @@ window.onerror = function(msg, src, line){
   }catch(err){}
 };
 </script>
+<!-- ===== 开发者模式（连点菜单底部版本号 / 游戏内楼层标签 5 次唤出） ===== -->
+<div id="devpass" class="dev-overlay dev-hide">
+  <div class="dev-box">
+    <div class="dev-title">开 发 者 模 式</div>
+    <div class="dev-sub">请输入访问密码</div>
+    <input id="devinput" class="dev-input" type="password" inputmode="text" autocomplete="off" spellcheck="false" placeholder="密码">
+    <div id="devmsg" class="dev-msg"></div>
+    <div class="dev-btns">
+      <button id="devok" class="dev-btn primary" type="button">确认</button>
+      <button id="devcancel" class="dev-btn" type="button">取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="devpanel" class="dev-overlay dev-hide">
+  <div class="dev-box wide">
+    <div class="dev-title">开 发 者 面 板</div>
+    <div class="dev-sub">点击开关切换 · 面板打开时游戏暂停</div>
+    <div id="devgrid" class="dev-grid"></div>
+    <div class="dev-btns">
+      <button id="devclose" class="dev-btn" type="button">关闭面板</button>
+    </div>
+  </div>
+</div>
+
 <script>console.warn('Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation'),
 /**
  * @license
@@ -2058,6 +2123,10 @@ var gunBaseRot = gunGroup.rotation.clone();
 var recoil = 0;
 var rampTrack = { id:-1, t0:0 }, rampCooldown = 0;
 var flashOn = true;
+var DEV_PASS = 'zzs';
+var dev = { on:false, god:false, infAmmo:false, infStam:false, infFlash:false,
+            oneShot:false, freeze:false, fast:false, debug:false };
+var devPanelOpen = false, devTaps = 0, devTapTimer = 0;
 var noiseLevel = 0;      /* 动静/暴露度：跑步与开灯会拉高，怪物更容易发现你 */
 var runHeld = false;
 var magDrops = [];
@@ -2642,6 +2711,7 @@ document.addEventListener('keyup', function(e){ keys[e.code]=false; });
 function curWeapon(){ return WEAPONS[player.weapons[player.cur].idx]; }
 function curSlot(){ return player.weapons[player.cur]; }
 function startReload(){
+  if(dev.on && dev.infAmmo) return;
   var w = curWeapon(), s = curSlot();
   if(player.reloading || s.mag>=w.magSize) return;
   player.reloading = true; player.reloadT = w.reloadT;
@@ -2704,11 +2774,11 @@ function fire(){
   var w = curWeapon(), s = curSlot();
   if(player.reloading) return;
   if(player.fireCd>0) return;
-  if(s.mag<=0){
+  if(s.mag<=0 && !(dev.on && dev.infAmmo)){
     if(!player.reloading){ AudioSys.empty(); startReload(); showMsg('自动换弹', 0.8); }
     return;
   }
-  s.mag--;
+  if(!(dev.on && dev.infAmmo)) s.mag--;
   player.fireCd = w.rate;
   recoil = 1;
   muzzle.material.opacity = 1; muzzle.rotation.z = rand(0,6.28);
@@ -2731,7 +2801,7 @@ function fire(){
     }
     if(best){
       var hp = new THREE.Vector3().copy(origin).addScaledVector(d, bestT);
-      best.hp -= w.dmg;
+      best.hp -= (dev.on && dev.oneShot) ? 99999 : w.dmg;
       spawnBlood(hp.x, hp.y, hp.z, 6);
       hitAny = true;
       if(best.hp<=0){ killMonster(best); }
@@ -2902,8 +2972,9 @@ function update(dt){
 }
 function updateInner(dt){
   if(!started || gameOver) return;
+  if(devPanelOpen) return;                       /* 开发者面板打开时暂停 */
 
-  elapsed += dt;
+  elapsed += dt * (dev.on && dev.fast ? 5 : 1); /* 开发者时间加速 */
 
   /* --- 移动 --- */
   var mv = {f:0,s:0};
@@ -2929,7 +3000,9 @@ function updateInner(dt){
 
   /* --- 体力 & 动静（暴露度） --- */
   var sprinting = sprint && moving;
-  if(sprinting){
+  if(dev.on && dev.infStam){
+    player.stamina = player.staminaMax; player.exhausted = false;
+  } else if(sprinting){
     player.stamina = Math.max(0, player.stamina - dt*26);   /* 满体力约可跑 7.7 秒 */
   } else {
     player.stamina = Math.min(player.staminaMax, player.stamina + dt*(player.exhausted?11:18));
@@ -3075,7 +3148,7 @@ function updateInner(dt){
   dustMat.opacity = 0.55 * flash.intensity/2.6;
 
   /* --- 手电耗电：只在开灯时耗电 --- */
-  if(started && !gameOver && flashOn){
+  if(started && !gameOver && flashOn && !(dev.on && dev.infFlash)){
     flashCharge = Math.max(0, flashCharge - dt/100);
     if(flashCharge < 0.18 && Math.random() < dt*0.15) showMsg('手电快没电了 · 找电池', 1.5);
   }
@@ -3166,6 +3239,7 @@ function updateMonsters(dt){
       continue;
     }
     if(!mo.alive) continue;
+    if(dev.on && dev.freeze) continue;
 
     mo.bob += dt;
     if(mo.atkTimer>0) mo.atkTimer -= dt;
@@ -3275,6 +3349,7 @@ function animateLimbs(mo, dt){
 
 function damagePlayer(dmg, mo){
   if(gameOver) return;
+  if(dev.on && dev.god) return;
   player.hp -= dmg;
   elDmg.style.opacity = 1;
   setTimeout(function(){ elDmg.style.opacity = 0; }, 160);
@@ -3358,6 +3433,130 @@ function showScreen(title, sub, btn, winState){
   elScreen.appendChild(wrap);
   b.addEventListener('pointerdown', function(e){ e.preventDefault(); location.reload(); });
 }
+
+/* ---------------- 开发者模式 ---------------- */
+var elDevPass = $('devpass'), elDevPanel = $('devpanel'), elDevInput = $('devinput');
+var elDevMsg = $('devmsg'), elDevGrid = $('devgrid');
+var DEV_ITEMS = [
+  ['god','无限生命','t'], ['infAmmo','无限子弹','t'], ['infStam','无限体力','t'],
+  ['infFlash','手电不耗电','t'], ['oneShot','一击必杀','t'], ['freeze','冻结怪物','t'],
+  ['fast','时间加速 ×5','t'], ['debug','显示状态行','t'],
+  ['unlock','解锁全部武器','a'], ['heal','回满生命体力','a'], ['clear','清空场上怪物','a'],
+  ['spawnP','刷出病人','a'], ['spawnC','刷出爬行者','a'], ['spawnG','刷出女鬼','a'],
+  ['spawnH','刷出八尺大人','a'], ['dawn','立即天亮（胜利）','a']
+];
+function devSpawnAt(type){
+  var t = MONSTER_TYPES[type]; if(!t) return;
+  var fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+  var px = player.pos.x + fx*4.5, pz = player.pos.z + fz*4.5;
+  var mesh = buildMonsterMesh(type);
+  mesh.position.set(px, floorY(currentFloor), pz);
+  scene.add(mesh);
+  monsters.push({type:type, mesh:mesh, floor:currentFloor,
+    pos:new THREE.Vector3(px, floorY(currentFloor)+(t.ghost?0.75:0), pz),
+    hp:t.hp, alive:true, atkTimer:0, bob:rand(0,6.28), dist:0});
+  showMsg('已刷出：' + type, 1.2);
+}
+function devAction(k){
+  if(k==='unlock'){
+    for(var i=1;i<WEAPONS.length;i++){
+      if(player.unlocked.indexOf(i) < 0) player.unlocked.push(i);
+      var has = false;
+      for(var j=0;j<player.weapons.length;j++){ if(player.weapons[j].idx===i) has = true; }
+      if(!has) player.weapons.push({idx:i, mag:WEAPONS[i].magSize});
+    }
+    buildGunModel(player.weapons[player.cur].idx);
+    updateWeaponHud();
+    showMsg('已解锁全部武器', 1.5);
+  } else if(k==='heal'){
+    player.hp = player.maxHp; player.stamina = player.staminaMax; player.exhausted = false;
+    updateHud(); showMsg('生命 / 体力已回满', 1.5);
+  } else if(k==='clear'){
+    for(var m=monsters.length-1;m>=0;m--){ if(monsters[m].alive) killMonster(monsters[m]); }
+    showMsg('已清空场上怪物', 1.5);
+  } else if(k==='dawn'){
+    gameOver = true; win();
+  } else if(k==='spawnP'){ devSpawnAt('patient'); }
+  else if(k==='spawnC'){ devSpawnAt('crawler'); }
+  else if(k==='spawnG'){ devSpawnAt('ghost'); }
+  else if(k==='spawnH'){ devSpawnAt('hachishaku'); }
+}
+function buildDevPanel(){
+  if(!elDevGrid) return;
+  elDevGrid.innerHTML = '';
+  DEV_ITEMS.forEach(function(it){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'dev-toggle' + ((it[2]==='t' && dev[it[0]]) ? ' on' : '');
+    b.textContent = it[1];
+    b.addEventListener('pointerdown', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(it[2]==='t'){
+        dev[it[0]] = !dev[it[0]];
+        b.classList.toggle('on', dev[it[0]]);
+        if(it[0]==='debug' && elFps) elFps.style.display = dev.debug ? 'block' : 'none';
+      } else {
+        devAction(it[0]);
+      }
+      AudioSys.pickup();
+    });
+    elDevGrid.appendChild(b);
+  });
+}
+function openDevPass(){
+  if(!elDevPass) return;
+  devTaps = 0;
+  elDevMsg.textContent = ''; elDevInput.value = '';
+  elDevPass.classList.remove('dev-hide');
+  setTimeout(function(){ try { elDevInput.focus(); } catch(e){} }, 150);
+}
+function openDevPanel(){
+  devPanelOpen = true;
+  buildDevPanel();
+  if(elDevPanel) elDevPanel.classList.remove('dev-hide');
+}
+function closeDevPanel(){
+  devPanelOpen = false;
+  if(elDevPanel) elDevPanel.classList.add('dev-hide');
+}
+if($('devok')) $('devok').addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  var v = (elDevInput.value || '').trim().toLowerCase();
+  if(v === DEV_PASS){
+    dev.on = true;
+    elDevPass.classList.add('dev-hide');
+    AudioSys.pickup();
+    openDevPanel();
+  } else {
+    elDevMsg.textContent = '密码错误';
+    elDevInput.value = '';
+    AudioSys.empty();
+  }
+});
+if($('devcancel')) $('devcancel').addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  elDevPass.classList.add('dev-hide');
+});
+if($('devclose')) $('devclose').addEventListener('pointerdown', function(e){
+  e.preventDefault(); closeDevPanel();
+});
+if(elDevInput) elDevInput.addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); if($('devok')) $('devok').dispatchEvent(new Event('pointerdown')); }
+});
+/* 隐藏入口：连点菜单底部版本号 / 游戏内楼层标签 5 次 */
+document.addEventListener('pointerdown', function(e){
+  var t = e.target; if(!t) return;
+  var isFoot = (t.className === 'menu-foot');
+  var isFloor = (t.id === 'floorlabel');
+  if(!isFoot && !isFloor) return;
+  devTaps++;
+  clearTimeout(devTapTimer);
+  devTapTimer = setTimeout(function(){ devTaps = 0; }, 1400);
+  if(devTaps >= 5){
+    devTaps = 0;
+    if(dev.on) openDevPanel(); else openDevPass();
+  }
+}, true);
 
 /* ---------------- 初始化（分步异步，低端机也不会假死黑屏） ---------------- */
 function setLoadingText(t){
