@@ -2563,19 +2563,19 @@ function fire(){
   if(player.fireCd>0) return;
   /* 投掷类武器（燃烧弹） */
   if(w.throw){
-    if(s.mag<=0 && !(dev.on && dev.infAmmo)){ AudioSys.empty(); startReload(); return; }
-    if(!(dev.on && dev.infAmmo)) s.mag--;
+    if(s.mag<=0 && !(dev.on && dev.infAmmo) && !training){ AudioSys.empty(); startReload(); return; }
+    if(!(dev.on && dev.infAmmo) && !training) s.mag--;
     player.fireCd = w.rate;
     recoil = 0.35;
     throwFirebomb();
     updateWeaponHud();
     return;
   }
-  if(s.mag<=0 && !(dev.on && dev.infAmmo)){
+  if(s.mag<=0 && !(dev.on && dev.infAmmo) && !training){
     if(!player.reloading){ AudioSys.empty(); startReload(); showMsg('自动换弹', 0.8); }
     return;
   }
-  if(!(dev.on && dev.infAmmo)) s.mag--;
+  if(!(dev.on && dev.infAmmo) && !training) s.mag--;
   player.fireCd = w.rate;
   recoil = 1;
   if(w.flame){
@@ -2677,6 +2677,7 @@ var healFlash = 0;
 var regenT = 0;
 var stats = {kills:0, pickups:0, notes:0, score:0};
 var night = 1;
+var training = false;                  /* 训练场模式 */
 var objectives = [];
 var objTimer = 0, sanityBreakT = 0, hbT = 0;
 var noisePulse = 0;                 /* 枪声引起的额外动静 */
@@ -2807,7 +2808,7 @@ function resetGame(){
   for(var skp=stickPacks.length-1; skp>=0; skp--){ scene.remove(stickPacks[skp].g); }
   stickPacks.length = 0;
   lightMul = 1; eventSpeedMul = 1; eventActive = ''; eventTimer = rand(60, 85); lastEvent = ''; noisePulse = 0;
-  rollObjectives();
+  if(!training) rollObjectives(); else objectives = [];
   if(PostFX && PostFX.setMood) PostFX.setMood(1);
   flashCharge = 1;
   flashOn = true;
@@ -2823,6 +2824,15 @@ function resetGame(){
   player.pos.set(0, floorY(0), 0); player.yaw=-Math.PI/2; player.pitch=0;
   player.hp=player.maxHp; elapsed=0; gameOver=false; started=true;
   player.cur=0; player.unlocked=[0];
+  if(training){
+    for(var tw=1; tw<WEAPONS.length; tw++){
+      player.unlocked.push(tw);
+      var hasW = false;
+      for(var tj=0; tj<player.weapons.length; tj++){ if(player.weapons[tj].idx===tw) hasW = true; }
+      if(!hasW) player.weapons.push({idx:tw, mag:WEAPONS[tw].magSize});
+      for(var tm=0; tm<player.weapons.length; tm++){ if(player.weapons[tm].idx===tw) player.weapons[tm].mag = WEAPONS[tw].magSize; }
+    }
+  }
   for(var w=0;w<player.weapons.length;w++){ player.weapons[w].mag = WEAPONS[player.weapons[w].idx].magSize; }
   player.reloading=false; player.fireCd=0; player.firing=false;
   spawnTimers = {};
@@ -2876,13 +2886,21 @@ function resetGame(){
   showMsg('00:00 夜班开始 · 受伤了找急救包 · 活到 06:00', 3.5);
 }
 
-function startGame(){
+function startGame(isTraining){
   if(started) return;
+  training = !!isTraining;
   AudioSys.init(); AudioSys.resume(); AudioSys.startAmbient();
   elScreen.classList.add('hidden');
   resetGame();
+  if(training){
+    if(elTrainbtn) elTrainbtn.style.display = 'flex';
+    showMsg('训练场 · 所有武器已解锁 · 右上「生成」按钮召唤敌人与道具', 5);
+  } else if(elTrainbtn){
+    elTrainbtn.style.display = 'none';
+  }
 }
-elStartBtn.addEventListener('pointerdown', function(e){ e.preventDefault(); startGame(); });
+elStartBtn.addEventListener('pointerdown', function(e){ e.preventDefault(); startGame(false); });
+if($('trainmenubtn')) $('trainmenubtn').addEventListener('pointerdown', function(e){ e.preventDefault(); startGame(true); });
 
 function update(dt){
   try { updateInner(dt); }
@@ -2895,7 +2913,7 @@ function updateInner(dt){
   if(!started || gameOver) return;
   if(devPanelOpen) return;                       /* 开发者面板打开时暂停 */
 
-  elapsed += dt * (dev.on && dev.fast ? 5 : 1); /* 开发者时间加速 */
+  if(!training) elapsed += dt * (dev.on && dev.fast ? 5 : 1); /* 训练场不计时 */
 
   /* --- 躲藏中：不能移动/开枪，理智与体力缓慢恢复 --- */
   if(player.hiding){
@@ -3009,7 +3027,7 @@ function updateInner(dt){
     hbT += dt;
     if(hbT > 1.15 - sRatio*2){ hbT = 0; try { AudioSys.heartbeat(); } catch(e){} }
   }
-  if(player.sanity <= 0){
+  if(player.sanity <= 0 && !training){
     sanityBreakT += dt;
     achState.madT += dt;
     if(sanityBreakT >= 1){ sanityBreakT = 0; damagePlayer(2, null); showMsg('精神崩溃 · 理智耗尽', 1.2); }
@@ -3261,7 +3279,7 @@ function updateInner(dt){
 
   updateHud();
 
-  if(elapsed >= NIGHT_DURATION){ win(); }
+  if(!training && elapsed >= NIGHT_DURATION){ win(); }
 }
 
 function updateSpawning(dt){
@@ -3547,7 +3565,17 @@ function damagePlayer(dmg, mo){
   setTimeout(function(){ elDmg.style.opacity = 0; }, 160);
   cameraShake = Math.min(cameraShake+0.15, 0.25);
   AudioSys.hurt();
-  if(player.hp<=0){ player.hp=0; lose(); }
+  if(player.hp<=0){
+    if(training){
+      player.hp = player.maxHp;
+      for(var tk=monsters.length-1; tk>=0; tk--){ if(monsters[tk].alive) killMonster(monsters[tk]); }
+      player.sanity = player.sanityMax; player.stamina = player.staminaMax;
+      showMsg('你被击倒了 · 场地已重置', 2.4);
+      updateHud();
+      return;
+    }
+    player.hp=0; lose();
+  }
   updateHud();
 }
 
@@ -3882,6 +3910,7 @@ function rollObjectives(){
 }
 function updateObjectives(){
   if(!elObjectives) return;
+  if(training){ elObjectives.innerHTML = ''; return; }
   var html = '';
   for(var i=0;i<objectives.length;i++){
     var o = objectives[i];
@@ -3984,6 +4013,87 @@ function exitLocker(forced){
     try { AudioSys.door(); } catch(e){}
   }
 }
+
+/* ---------------- 训练场生成面板 ---------------- */
+var elTrainPanel = $('trainpanel'), elTrainGrid = $('traingrid');
+var TRAIN_MON = [['patient','病人'],['crawler','爬行者'],['spawnling','幼体'],['doctor','疯医生'],['ghost','女鬼'],
+                 ['matron','护士长'],['blind','盲眼修女'],['hachishaku','八尺大人'],['brute','巨躯病人'],['slender','瘦长鬼影']];
+var TRAIN_ITEM = [['med','急救包'],['sed','镇静剂'],['stick','荧光棒'],['bat','电池'],['note','病历'],['weapon','补满弹药']];
+function trainFrontSpot(km){
+  var fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+  return [clamp(player.pos.x + fx*km, -19.5, 16), clamp(player.pos.z + fz*km, -26.5, 8.5)];
+}
+function trainAction(kind, val){
+  if(kind === 'mon'){
+    devSpawnAt(val);
+  } else if(kind === 'item'){
+    var sp2 = trainFrontSpot(2.6);
+    if(val === 'med') spawnHealthPack(sp2[0], sp2[1], currentFloor);
+    else if(val === 'sed') spawnSedative(sp2[0], sp2[1], currentFloor);
+    else if(val === 'stick') spawnStickPack(sp2[0], sp2[1], currentFloor);
+    else if(val === 'bat') spawnBattery(sp2[0], sp2[1], currentFloor);
+    else if(val === 'note') spawnNote(sp2[0], sp2[1], currentFloor, randi(0, NOTE_TEXTS.length-1));
+    else if(val === 'weapon'){
+      for(var i=0;i<player.weapons.length;i++){ player.weapons[i].mag = WEAPONS[player.weapons[i].idx].magSize; }
+      flashCharge = 1; updateWeaponHud();
+      showMsg('弹药与电量已补满', 1.6);
+    }
+  } else if(kind === 'act'){
+    if(val === 'clear'){
+      for(var m2=monsters.length-1; m2>=0; m2--){ if(monsters[m2].alive) killMonster(monsters[m2]); }
+      showMsg('已清空场上敌人', 1.5);
+    } else if(val === 'heal'){
+      player.hp = player.maxHp; player.stamina = player.staminaMax;
+      player.sanity = player.sanityMax; player.exhausted = false; flashCharge = 1;
+      updateHud(); showMsg('生命 / 体力 / 理智 / 电量 全部回满', 1.8);
+    } else if(val === 'close'){
+      closeTrainPanel();
+    }
+  }
+  try { AudioSys.pickup(); } catch(e){}
+}
+function buildTrainPanel(){
+  if(!elTrainGrid) return;
+  elTrainGrid.innerHTML = '';
+  function section(title){
+    var h = document.createElement('div');
+    h.className = 'dev-sub'; h.style.margin = '6px 0 8px';
+    h.textContent = title;
+    elTrainGrid.appendChild(h);
+  }
+  function grid(items, kind){
+    var wrap = document.createElement('div');
+    wrap.className = 'dev-grid';
+    items.forEach(function(it){
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'dev-toggle'; b.textContent = it[1];
+      b.addEventListener('pointerdown', function(e){ e.preventDefault(); e.stopPropagation(); trainAction(kind, it[0]); });
+      wrap.appendChild(b);
+    });
+    elTrainGrid.appendChild(wrap);
+  }
+  section('召唤敌人');
+  grid(TRAIN_MON, 'mon');
+  section('生成道具');
+  grid(TRAIN_ITEM, 'item');
+  section('场地操作');
+  grid([['heal','回满状态'],['clear','清空敌人'],['close','关闭面板']], 'act');
+}
+function openTrainPanel(){
+  devPanelOpen = true;
+  buildTrainPanel();
+  if(elTrainPanel) elTrainPanel.classList.remove('dev-hide');
+}
+function closeTrainPanel(){
+  devPanelOpen = false;
+  if(elTrainPanel) elTrainPanel.classList.add('dev-hide');
+}
+var elTrainbtn = $('trainbtn');
+if(elTrainbtn) elTrainbtn.addEventListener('pointerdown', function(e){
+  e.preventDefault(); e.stopPropagation();
+  if(devPanelOpen) closeTrainPanel(); else openTrainPanel();
+});
+if($('trainclose')) $('trainclose').addEventListener('pointerdown', function(e){ e.preventDefault(); closeTrainPanel(); });
 
 /* ---------------- 开发者模式 ---------------- */
 var elDevPass = $('devpass'), elDevPanel = $('devpanel'), elDevInput = $('devinput');
