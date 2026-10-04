@@ -23,12 +23,12 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #hpbar { width:150px; height:3px; background:rgba(222,217,204,0.12); }
 #healthfill { height:100%; width:100%; background:#9c342c; transition:width .25s; }
 #hptext { font-size:10px; letter-spacing:0.16em; color:#a39d8e; margin-top:6px; font-variant-numeric:tabular-nums; }
-#stamlabel { font-size:10px; letter-spacing:0.42em; color:#8f8a7c; margin:13px 0 7px; }
+#stamlabel { font-size:10px; letter-spacing:0.42em; color:#8f8a7c; margin:11px 0 6px; }
 #stambar { width:150px; height:3px; background:rgba(222,217,204,0.12); }
 #stamfill { height:100%; width:100%; background:#6f9c5a; transition:width .12s linear; }
 #stamfill.low { background:#c9a13a; }
 #stamfill.empty { background:#9c342c; }
-#threat { font-size:10px; letter-spacing:0.16em; color:#6f9c5a; margin-top:8px; }
+#threat { font-size:10px; letter-spacing:0.16em; color:#6f9c5a; margin-top:6px; }
 #threat.warn { color:#c9a13a; }
 #threat.bad { color:#c25a4a; }
 .rbtn.active { border-color:#c9a13a; background:rgba(201,161,58,0.20); }
@@ -41,7 +41,7 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #dawnlabel { font-size:10px; letter-spacing:0.24em; color:#8f8a7c; margin-top:7px; }
 
 /* --- 右上：楼层 / 武器 --- */
-#fps { position:absolute; top:150px; left:22px; font-size:12px; letter-spacing:0.08em; color:#c9b98a; font-variant-numeric:tabular-nums; text-shadow:0 0 6px #000; }
+#fps { display:none; position:absolute; top:152px; left:22px; font-size:11px; letter-spacing:0.06em; color:#8f8a7c; font-variant-numeric:tabular-nums; text-shadow:0 0 6px #000; }
   #floorlabel { position:absolute; top:22px; right:22px; font-size:11px; letter-spacing:0.32em; color:#a39d8e; }
 #gunbox { position:absolute; top:54px; right:22px; text-align:right; }
 #weaponname { font-size:13px; letter-spacing:0.24em; color:#c9c2b2; }
@@ -73,10 +73,10 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 }
 
 /* --- 右下：按钮组 --- */
-#btncluster { position:absolute; right:24px; bottom:26px; display:flex; flex-direction:column; align-items:flex-end; gap:14px; pointer-events:auto; }
-.btnrow { display:flex; gap:12px; }
+#btncluster { position:absolute; right:26px; bottom:28px; display:flex; flex-direction:column; align-items:center; gap:12px; pointer-events:auto; }
+.btnrow { display:flex; gap:11px; }
 .rbtn {
-  width:56px; height:56px; border-radius:50%;
+  width:54px; height:54px; border-radius:50%;
   border:1px solid rgba(222,217,204,0.26); background:rgba(10,11,14,0.48);
   color:#ded9cc; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   pointer-events:auto;
@@ -221,6 +221,8 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
         </svg>
         <span>换弹</span>
       </button>
+    </div>
+    <div class="btnrow">
       <button class="rbtn" id="runbtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
           <circle cx="14.2" cy="4.2" r="1.9"/>
@@ -360,6 +362,8 @@ var elFade = $('fade');
 var elHeal = $('healflash');
 var elLoading = $('loading');
 var elFps = $('fps');
+var debugOn = /[?&]debug=1/.test(location.search);
+if(debugOn && elFps) elFps.style.display = 'block';
 var elFlashbtn = $('flashbtn');
 var elRunbtn = $('runbtn');
 var elStamFill = $('stamfill');
@@ -2518,15 +2522,28 @@ function toggleFlash(){
   showMsg(flashOn ? '手电已打开' : '手电已关闭（黑暗中更危险）', 1.4);
 }
 if(elFlashbtn) elFlashbtn.addEventListener('pointerdown', function(e){ e.preventDefault(); toggleFlash(); });
-/* 跑步按钮：按住就跑 */
-if(elRunbtn){
-  var runOn = function(e){ e.preventDefault(); runHeld = true; elRunbtn.classList.add('active'); };
-  var runOff = function(e){ if(e) e.preventDefault(); runHeld = false; elRunbtn.classList.remove('active'); };
-  elRunbtn.addEventListener('pointerdown', runOn);
-  elRunbtn.addEventListener('pointerup', runOff);
-  elRunbtn.addEventListener('pointercancel', runOff);
-  elRunbtn.addEventListener('pointerleave', runOff);
+/* 跑步：点一下切换开/关（不会卡住） */
+var runMode = false;
+function setRunMode(v){
+  runMode = !!v;
+  runHeld = false;
+  if(elRunbtn){
+    elRunbtn.classList.toggle('active', runMode);
+    var rb = elRunbtn.querySelector('span');
+    if(rb) rb.textContent = runMode ? '跑动' : '跑步';
+  }
 }
+if(elRunbtn) elRunbtn.addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  setRunMode(!runMode);
+  AudioSys.pickup();
+  showMsg(runMode ? '跑步模式：开启（脚步声很大）' : '跑步模式：关闭', 1.2);
+});
+/* 兜底：手指抬起/切后台一律复位，避免状态卡死 */
+document.addEventListener('pointerup', function(){ runHeld = false; }, true);
+document.addEventListener('pointercancel', function(){ runHeld = false; }, true);
+window.addEventListener('blur', function(){ runHeld = false; });
+document.addEventListener('visibilitychange', function(){ if(document.hidden) runHeld = false; });
 $('weapon').addEventListener('pointerdown', function(e){ e.preventDefault(); cycleWeapon(); });
 
 var keys = {};
@@ -2575,7 +2592,14 @@ function cycleWeapon(){
   var next = player.unlocked[(pos+1)%n];
   for(var i=0;i<player.weapons.length;i++){ if(player.weapons[i].idx===next){ player.cur=i; break; } }
   player.reloading=false; player.fireCd=0;
+  buildGunModel(next);                       /* 关键：重建武器模型 */
+  recoil = 0;
+  muzzle.material.opacity = 0;
+  gunGroup.position.copy(gunBasePos);
+  gunGroup.rotation.set(gunBaseRot.x, gunBaseRot.y, gunBaseRot.z);
   updateWeaponHud();
+  AudioSys.pickup();
+  showMsg('切换到 ' + curWeapon().name, 1.0);
 }
 function unlockWeapon(idx, early){
   if(player.unlocked.indexOf(idx)>=0) return;
@@ -2721,8 +2745,8 @@ function resetGame(){
   flashCharge = 1;
   flashOn = true;
   player.stamina = player.staminaMax; player.exhausted = false;
-  noiseLevel = 0; runHeld = false;
-  if(elRunbtn) elRunbtn.classList.remove('active');
+  noiseLevel = 0;
+  setRunMode(false);
   flash.visible = true; beam.visible = true;
   if(elFlashbtn){ elFlashbtn.classList.remove('off'); var fb = elFlashbtn.querySelector('span'); if(fb) fb.textContent = '手电'; }
   for(var md=magDrops.length-1;md>=0;md--){ scene.remove(magDrops[md].m); }
@@ -2793,7 +2817,7 @@ function updateInner(dt){
   if(keys['KeyA']||keys['ArrowLeft']) mv.s-=1;
   if(keys['KeyD']||keys['ArrowRight']) mv.s+=1;
   var jlen = Math.sqrt(joyVec.x*joyVec.x+joyVec.y*joyVec.y);
-  var wantSprint = (jlen>0.92) || runHeld || keys['ShiftLeft'] || keys['ShiftRight'];
+  var wantSprint = runMode || (jlen>0.92) || runHeld || keys['ShiftLeft'] || keys['ShiftRight'];
   var sprint = wantSprint && !player.exhausted && player.stamina > 0;
 
   var speed = sprint?SPRINT_SPEED:WALK_SPEED;
