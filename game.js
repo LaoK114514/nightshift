@@ -3259,7 +3259,7 @@ function updateInner(dt){
   updateHud();
 
   /* --- 怪物 --- */
-  updateSpawning(dt);
+  if(!training) updateSpawning(dt);   /* 训练场不自动刷怪，完全由玩家召唤 */
   updateMonsters(dt);
   updatePickups(dt);
   updateParticles(dt);
