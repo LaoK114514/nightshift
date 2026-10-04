@@ -92,6 +92,7 @@ var AudioSys = {
   heal(){ this.tone(520,0.12,'sine',0.2); this.tone(780,0.18,'sine',0.18); this.tone(1040,0.24,'sine',0.12); },
   bang(){ this.noise(0.09, 0.32, 500); this.tone(70, 0.09, 'square', 0.22, 45); },
   crossbow(){ this.tone(190, 0.07, 'square', 0.16, 110); this.noise(0.06, 0.12, 800, 'lowpass'); },
+  flame(){ var self = this; this.safe(function(){ self.noise(0.2, 0.09, 1100, 'bandpass'); self.tone(130, 0.18, 'sawtooth', 0.07, 95); }); },
   heartbeat(){ this.tone(55,0.12,'sine',0.5,38); },
   stairs(){ this.tone(220,0.25,'sine',0.18, 160); this.tone(330,0.3,'sine',0.12, 240); }
 };
@@ -699,6 +700,14 @@ var beamCanvas = makeCanvas(256, 64, function(ctx, w, h){
     }
   }
 });
+var flameCone = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 1.5, 6.5, 14, 1, true),
+  new THREE.MeshBasicMaterial({color:0xff9a3c, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
+flameCone.rotation.x = -Math.PI/2; flameCone.position.set(0.02,-0.16,-3.4);
+flameCone.visible = false;
+camera.add(flameCone);
+var flameLight = new THREE.PointLight(0xff8a30, 0, 9, 2);
+flameLight.position.set(0.1,-0.2,-2.2);
+camera.add(flameLight);
 var beam = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 6.6, 16, 20, 1, true),
   new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(beamCanvas), transparent:true, opacity:0.22, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, depthWrite:false, fog:false}));
 beam.rotation.x = -Math.PI/2;
@@ -1728,7 +1737,9 @@ var WEAPONS = [
   {name:'霰弹枪', magSize:6,  dmg:22, pellets:8, spread:0.055, rate:0.9, reloadT:2.2, auto:false},
   {name:'冲锋枪', magSize:30, dmg:18, pellets:1, spread:0.032, rate:0.085, reloadT:1.8, auto:true},
   {name:'狙击枪', magSize:5,  dmg:150, pellets:1, spread:0.001, rate:1.4, reloadT:2.8, auto:false},
-  {name:'十字弩', magSize:1,  dmg:120, pellets:1, spread:0.004, rate:1.1, reloadT:2.4, auto:false, silent:true}
+  {name:'十字弩', magSize:1,  dmg:120, pellets:1, spread:0.004, rate:1.1, reloadT:2.4, auto:false, silent:true},
+  {name:'燃烧弹', magSize:1,  dmg:0,   pellets:1, spread:0,     rate:1.0, reloadT:1.8, auto:false, throw:true},
+  {name:'火焰喷射器', magSize:120, dmg:7, pellets:1, spread:0.075, rate:0.05, reloadT:3.2, auto:true, flame:true, range:6.5}
 ];
 var player = {
   pos:new THREE.Vector3(0,0,0), yaw:Math.PI, pitch:0,
@@ -1758,6 +1769,7 @@ var dev = { on:false, god:false, infAmmo:false, infStam:false, infFlash:false,
             oneShot:false, freeze:false, fast:false, debug:false, noSanity:false };
 var devPanelOpen = false, devTaps = 0, devTapTimer = 0;
 var doorHoldT = 0, doorHolding = false;   /* 门按钮长按进度 */
+var flameActive = 0;                      /* 火焰喷射器视觉计时 */
 var noiseLevel = 0;      /* 动静/暴露度：跑步与开灯会拉高，怪物更容易发现你 */
 var runHeld = false;
 var magDrops = [];
@@ -1829,6 +1841,30 @@ function buildGunModel(idx){
     var cTrig = new THREE.Mesh(new THREE.BoxGeometry(0.014,0.035,0.01), metalMat); cTrig.position.set(0,-0.014,0.05); g.add(cTrig);
     var cSide = new THREE.Mesh(cy(0.016,0.016,0.1,8), darkMat); cSide.rotation.x = Math.PI/2; cSide.position.set(0,0.088,-0.04); g.add(cSide);
     addHand(g, -0.005, -0.048, -0.02);
+  } else if(idx===5){
+    /* 燃烧弹：玻璃瓶 + 布条 */
+    var bottle = new THREE.Mesh(cy(0.035,0.045,0.2,10), new THREE.MeshStandardMaterial({color:0x6a4a22, roughness:0.25, metalness:0.1, transparent:true, opacity:0.85}));
+    bottle.position.set(0,0,-0.02); g.add(bottle);
+    var neck = new THREE.Mesh(cy(0.018,0.022,0.09,8), new THREE.MeshStandardMaterial({color:0x6a4a22, roughness:0.3, transparent:true, opacity:0.8}));
+    neck.position.set(0,0.14,-0.02); g.add(neck);
+    var rag = new THREE.Mesh(new THREE.BoxGeometry(0.03,0.11,0.03), new THREE.MeshStandardMaterial({color:0xd8d2c4, roughness:0.95}));
+    rag.position.set(0,0.23,-0.02); rag.rotation.z = 0.25; g.add(rag);
+    var flame0 = new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6), new THREE.MeshBasicMaterial({color:0xffa53a, transparent:true, opacity:0.9}));
+    flame0.position.set(0,0.3,-0.02); g.add(flame0);
+    addHand(g, -0.01, -0.04, -0.01);
+  } else if(idx===6){
+    /* 火焰喷射器：燃料罐 + 长喷管 + 点火器 */
+    var tank = new THREE.Mesh(cy(0.06,0.06,0.26,12), metalMat); tank.position.set(0,-0.02,0.06); g.add(tank);
+    var tank2 = new THREE.Mesh(cy(0.055,0.055,0.24,12), darkMat); tank2.position.set(0.085,-0.02,0.1); g.add(tank2);
+    var nozzle = new THREE.Mesh(cy(0.022,0.022,0.44,10), darkMat); nozzle.rotation.x = Math.PI/2; nozzle.position.set(0,0.035,-0.28); g.add(nozzle);
+    var nozEnd = new THREE.Mesh(cy(0.038,0.028,0.07,10), metalMat); nozEnd.rotation.x = Math.PI/2; nozEnd.position.set(0,0.035,-0.52); g.add(nozEnd);
+    var pilot = new THREE.Mesh(new THREE.SphereGeometry(0.022,8,6), new THREE.MeshBasicMaterial({color:0xffb45a}));
+    pilot.position.set(0,0.055,-0.56); g.add(pilot);
+    var handle = new THREE.Mesh(new THREE.BoxGeometry(0.045,0.11,0.05), darkMat); handle.position.set(0,-0.075,0.02); handle.rotation.x = 0.2; g.add(handle);
+    var trigger2 = new THREE.Mesh(new THREE.BoxGeometry(0.014,0.04,0.01), metalMat); trigger2.position.set(0,-0.02,0.03); g.add(trigger2);
+    var hose = new THREE.Mesh(cy(0.018,0.018,0.3,8), new THREE.MeshStandardMaterial({color:0x1a1c20, roughness:0.9}));
+    hose.rotation.z = Math.PI/2; hose.position.set(-0.14,-0.02,0.08); g.add(hose);
+    addHand(g, -0.01, -0.075, 0.0);
   } else {
     var recv2 = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.08,0.32), metalMat); recv2.position.set(0,0.03,0); g.add(recv2);
     var b3 = new THREE.Mesh(cy(0.015,0.015,0.17,8), metalMat); b3.rotation.x=Math.PI/2; b3.position.set(0,0.035,-0.21); g.add(b3);
@@ -1865,7 +1901,10 @@ var MONSTER_TYPES = {
   doctor:     {hp:90,  speed:2.4, dmg:9,  radius:0.45, height:1.8, halfH:0.9,  atkR:1.5,  atkCd:1.25},
   ghost:      {hp:90,  speed:2.7, dmg:10, radius:0.5,  height:1.6, halfH:0.8,  atkR:1.55, atkCd:1.25, ghost:true},
   hachishaku: {hp:300, speed:1.4, dmg:18, radius:0.6,  height:2.6, halfH:1.3,  atkR:1.9,  atkCd:1.5},
-  slender:    {hp:200, speed:2.1, dmg:13, radius:0.45, height:2.7, halfH:1.35, atkR:1.8,  atkCd:1.35, slender:true}
+  slender:    {hp:200, speed:2.1, dmg:13, radius:0.45, height:2.7, halfH:1.35, atkR:1.8,  atkCd:1.35, slender:true},
+  matron:     {hp:110, speed:1.9, dmg:15, radius:0.45, height:1.75, halfH:0.88, atkR:1.5,  atkCd:1.1,  scream:true},
+  brute:      {hp:380, speed:1.15,dmg:30, radius:0.7,  height:2.3,  halfH:1.15, atkR:2.0,  atkCd:1.7,  brute:true},
+  spawnling:  {hp:22,  speed:3.6, dmg:6,  radius:0.3,  height:0.7,  halfH:0.35, atkR:1.1,  atkCd:0.55}
 };
 var monsters = [];
 var spawnTimers = {};
@@ -2002,6 +2041,67 @@ function buildMonsterMesh(type){
     var rosary = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 6, 12), new THREE.MeshStandardMaterial({color:0x8a7a4a, roughness:0.4, metalness:0.6}));
     rosary.position.set(0, 1.25, 0.26); g.add(rosary);
     g.userData = {armL:armBL, armR:armBR, torso:robe};
+  } else if(type==='matron'){
+    /* 护士长：白裙 + 血围裙 + 护士帽 + 口罩 + 巨型针筒 */
+    var dress = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.42, 1.0, 10), new THREE.MeshStandardMaterial({color:0xe9ecee, roughness:0.85}));
+    dress.position.y = 0.55; g.add(dress);
+    var apron = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.72, 0.06), new THREE.MeshStandardMaterial({color:0x8a2320, roughness:0.9}));
+    apron.position.set(0, 0.52, 0.2); g.add(apron);
+    var torsoM = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.26), new THREE.MeshStandardMaterial({color:0xf2f4f5, roughness:0.85}));
+    torsoM.position.y = 1.2; g.add(torsoM);
+    var headM = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), skinM); headM.position.y = 1.56; g.add(headM);
+    var faceM2 = new THREE.Mesh(new THREE.PlaneGeometry(0.23, 0.26), texStd(facePatientCanvas)); faceM2.position.set(0, 1.56, 0.12); g.add(faceM2);
+    var mask = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.03), new THREE.MeshStandardMaterial({color:0xdfe6ea, roughness:0.85}));
+    mask.position.set(0, 1.5, 0.14); g.add(mask);
+    var cap = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.2), new THREE.MeshStandardMaterial({color:0xf6f7f8, roughness:0.8}));
+    cap.position.y = 1.69; g.add(cap);
+    var armML = new THREE.Group(); armML.position.set(-0.26, 1.36, 0);
+    m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.042, 0.56, 8), new THREE.MeshStandardMaterial({color:0xf2f4f5, roughness:0.85})); m.position.y = -0.28; armML.add(m);
+    var syringe = new THREE.Mesh(cy(0.028,0.028,0.22,8), new THREE.MeshStandardMaterial({color:0xd8e4ea, roughness:0.2, transparent:true, opacity:0.75}));
+    syringe.position.set(0, -0.62, 0.06); armML.add(syringe);
+    var sTip = new THREE.Mesh(cy(0.006,0.006,0.1,6), metalMat); sTip.position.set(0, -0.76, 0.06); armML.add(sTip);
+    var armMR = armML.clone(); armMR.position.x = 0.26; armMR.children[1].visible = false; armMR.children[2].visible = false;
+    g.add(armML); g.add(armMR);
+    var legML = new THREE.Group(); legML.position.set(-0.12, 0.5, 0);
+    m = new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.05,0.5,8), new THREE.MeshStandardMaterial({color:0xe4e7e9, roughness:0.85})); m.position.y = -0.26; legML.add(m);
+    var legMR = legML.clone(); legMR.position.x = 0.12;
+    g.add(legML); g.add(legMR);
+    g.userData = {armL:armML, armR:armMR, legL:legML, legR:legMR, torso:torsoM};
+  } else if(type==='brute'){
+    /* 巨躯病人：臃肿巨大，粗壮四肢 */
+    var belly = new THREE.Mesh(new THREE.SphereGeometry(0.7, 14, 12), texStd(fabricCanvas));
+    belly.scale.set(1, 0.95, 0.85); belly.position.y = 0.85; g.add(belly);
+    var chest = new THREE.Mesh(new THREE.SphereGeometry(0.56, 14, 12), texStd(fabricCanvas));
+    chest.scale.set(1.1, 0.8, 0.85); chest.position.y = 1.45; g.add(chest);
+    var headB2 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), skinM);
+    headB2.scale.set(0.95, 0.85, 0.95); headB2.position.y = 1.95; g.add(headB2);
+    var faceB2 = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.32), texStd(facePatientCanvas));
+    faceB2.position.set(0, 1.94, 0.19); g.add(faceB2);
+    var armBL2 = new THREE.Group(); armBL2.position.set(-0.72, 1.5, 0);
+    m = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.12, 0.72, 9), skinM); m.position.y = -0.36; armBL2.add(m);
+    m = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), skinM); m.position.y = -0.76; armBL2.add(m);
+    var armBR2 = armBL2.clone(); armBR2.position.x = 0.72;
+    g.add(armBL2); g.add(armBR2);
+    var legBL = new THREE.Group(); legBL.position.set(-0.3, 0.46, 0);
+    m = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.5, 9), skinM); m.position.y = -0.26; legBL.add(m);
+    m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.1, 0.36), new THREE.MeshStandardMaterial({color:0x14161a, roughness:0.9})); m.position.set(0,-0.53,-0.04); legBL.add(m);
+    var legBR = legBL.clone(); legBR.position.x = 0.3;
+    g.add(legBL); g.add(legBR);
+    g.userData = {armL:armBL2, armR:armBR2, legL:legBL, legR:legBR, torso:belly};
+  } else if(type==='spawnling'){
+    /* 幼体：小型多足爬行体 */
+    var sac = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), new THREE.MeshStandardMaterial({color:0x3a2f2c, roughness:0.95}));
+    sac.scale.set(1, 0.8, 1.25); sac.position.y = 0.24; g.add(sac);
+    var sacHead = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), skinM); sacHead.position.set(0, 0.24, 0.22); g.add(sacHead);
+    var legSets = [[-0.18,0.16],[0.18,0.16],[-0.2,-0.02],[0.2,-0.02],[-0.16,-0.2],[0.16,-0.2]];
+    for(var li=0; li<legSets.length; li++){
+      var lg = new THREE.Mesh(cy(0.016,0.012,0.34,6), skinM);
+      lg.position.set(legSets[li][0]*1.5, 0.2, legSets[li][1]);
+      lg.rotation.z = (legSets[li][0] > 0 ? -1 : 1) * 0.9;
+      lg.rotation.x = (legSets[li][1] > 0 ? -0.5 : 0.5);
+      g.add(lg);
+    }
+    g.userData = {torso:sac};
   } else if(type==='crawler'){
     /* 爬行者：贴地爬行，四肢拖行 */
     var bodyC = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.3,0.66), texStd(fabricCanvas));
@@ -2093,7 +2193,7 @@ function buildMonsterMesh(type){
   markShadow(g);
   return g;
 }
-function spawnMonster(type){
+function spawnMonster(type, noGroup){
   var t = MONSTER_TYPES[type];
   var pts = spawnPointsByFloor[currentFloor] || spawnPointsByFloor[0] || [];
   if(!pts || pts.length === 0) return;
@@ -2110,6 +2210,10 @@ function spawnMonster(type){
   monsters.push({type:type, mesh:mesh, floor:currentFloor,
     pos:new THREE.Vector3(sp[0], floorY(currentFloor)+(ghost?0.75:0), sp[1]),
     hp:t.hp, alive:true, atkTimer:0, bob:rand(0,6.28), dist:0});
+  /* 幼体成群出现 */
+  if(type==='spawnling' && !noGroup){
+    for(var sg=0; sg<2; sg++){ setTimeout(function(){ spawnMonster('spawnling', true); }, 60 + sg*120); }
+  }
 }
 
 /* ---------------- 电池（手电耗电） ---------------- */
@@ -2457,6 +2561,16 @@ function fire(){
   var w = curWeapon(), s = curSlot();
   if(player.reloading) return;
   if(player.fireCd>0) return;
+  /* 投掷类武器（燃烧弹） */
+  if(w.throw){
+    if(s.mag<=0 && !(dev.on && dev.infAmmo)){ AudioSys.empty(); startReload(); return; }
+    if(!(dev.on && dev.infAmmo)) s.mag--;
+    player.fireCd = w.rate;
+    recoil = 0.35;
+    throwFirebomb();
+    updateWeaponHud();
+    return;
+  }
   if(s.mag<=0 && !(dev.on && dev.infAmmo)){
     if(!player.reloading){ AudioSys.empty(); startReload(); showMsg('自动换弹', 0.8); }
     return;
@@ -2464,7 +2578,12 @@ function fire(){
   if(!(dev.on && dev.infAmmo)) s.mag--;
   player.fireCd = w.rate;
   recoil = 1;
-  if(w.silent){
+  if(w.flame){
+    /* 火焰喷射器：短程锥形灼烧 */
+    flameActive = 0.14;
+    if(Math.random() < 0.3){ try { AudioSys.flame(); } catch(e){} }
+    noisePulse = Math.max(noisePulse, 0.8);
+  } else if(w.silent){
     /* 十字弩：静音，不惊动盲眼修女，也没有枪口火焰 */
     AudioSys.crossbow();
   } else {
@@ -2486,11 +2605,11 @@ function fire(){
       var t = MONSTER_TYPES[mo.type];
       var c = new THREE.Vector3(mo.pos.x, mo.pos.y + t.halfH, mo.pos.z);
       var tt = raySphere(origin, d, c, t.halfH*0.95);
-      if(tt>=0 && tt<bestT){ bestT=tt; best=mo; }
+      if(tt>=0 && tt<bestT && (!w.range || tt <= w.range)){ bestT=tt; best=mo; }
     }
     if(best){
       var hp = new THREE.Vector3().copy(origin).addScaledVector(d, bestT);
-      best.hp -= (dev.on && dev.oneShot) ? 99999 : w.dmg;
+      best.hp -= (dev.on && dev.oneShot) ? 99999 : (w.flame ? w.dmg : w.dmg);
       spawnBlood(hp.x, hp.y, hp.z, 6);
       hitAny = true;
       if(best.hp<=0){ killMonster(best); }
@@ -2673,6 +2792,13 @@ function resetGame(){
   sanityBreakT = 0; hbT = 0; objTimer = 0;
   for(var gs=glowSticks.length-1; gs>=0; gs--){ if(glowSticks[gs].light) scene.remove(glowSticks[gs].light); scene.remove(glowSticks[gs].m); }
   glowSticks.length = 0;
+  for(var fp2=firePools.length-1; fp2>=0; fp2--){
+    if(firePools[fp2].light) scene.remove(firePools[fp2].light);
+    for(var ff2=0; ff2<firePools[fp2].flames.length; ff2++) scene.remove(firePools[fp2].flames[ff2]);
+    scene.remove(firePools[fp2].m);
+  }
+  firePools.length = 0;
+  flameActive = 0; flameCone.visible = false; flameLight.intensity = 0;
   player.sticks = 3; updateStickHud();
   player.hiding = false; player.hideLocker = null;
   if(elHideView) elHideView.classList.remove('on');
@@ -2707,6 +2833,8 @@ function resetGame(){
   spawnPickup(2, 5.1, -13.5, 1);   // 2F 药库（支廊东侧）
   spawnPickup(3, -14.5, -6, 2);    // 3F 天台楼梯房旁（狙击枪）
   spawnPickup(4, 5.1, -7.5, 0);    // 1F 储物间（十字弩）
+  spawnPickup(5, 5.1, -7.5, 1);    // 2F 监控室（燃烧弹）
+  spawnPickup(6, 5.1, -19.5, 1);   // 2F 手术室（火焰喷射器）
   spawnSedative(8.5, 3.4, 0);      // 1F 病房C
   spawnSedative(-8.5, -13.5, 1);   // 2F 病房H
   spawnSedative(12.5, 5.1, 2);     // 3F 天台东侧
@@ -3044,6 +3172,20 @@ function updateInner(dt){
     if(!player.magDropped && rprog > 0.22){ player.magDropped = true; dropMagazine(); }
   }
   updateMagDrops(dt);
+  /* --- 火焰喷射器视觉 --- */
+  if(flameActive > 0){
+    flameActive -= dt;
+    if(curWeapon().flame){
+      flameCone.visible = true;
+      flameCone.material.opacity = 0.5 + Math.random()*0.35;
+      flameCone.scale.set(1 + Math.random()*0.18, 1, 0.9 + Math.random()*0.22);
+      flameLight.intensity = 2.4 + Math.random()*1.5;
+    }
+  } else {
+    if(flameCone.visible){ flameCone.visible = false; }
+    flameLight.intensity = 0;
+  }
+  updateFirePools(dt);
   /* --- 武器摆动（呼吸/步伐） --- */
   weaponSway = clamp(weaponSway + (moving ? dt*2.5 : -dt*2.5), 0.25, 1);
   var swayT = elapsed*2.1;
@@ -3132,9 +3274,12 @@ function updateSpawning(dt){
     doctor: t>105 ? Math.round(Math.min(1 + Math.floor((t-105)/120), 1) * dmul) : 0,
     ghost: t>70 ? Math.round(Math.min(1 + Math.floor((t-70)/130), 1) * dmul) : 0,
     hachishaku: t>130 ? Math.round(1 * dmul) : 0,
-    slender: t>200 ? 1 : 0
+    slender: t>200 ? 1 : 0,
+    matron: t>85 ? Math.round(Math.min(1 + Math.floor((t-85)/140), 1) * dmul) : 0,
+    spawnling: t>60 ? Math.round(Math.min(1 + Math.floor((t-60)/100), 2) * dmul) : 0,
+    brute: t>155 ? 1 : 0
   };
-  var names = ['patient','crawler','blind','doctor','ghost','hachishaku','slender'];
+  var names = ['patient','crawler','spawnling','blind','doctor','ghost','matron','hachishaku','brute','slender'];
   for(var n=0;n<names.length;n++){
     var nm = names[n];
     if(spawnTimers[nm] === undefined) spawnTimers[nm] = 0;
@@ -3165,6 +3310,33 @@ function updateMonsters(dt){
 
     mo.bob += dt;
     if(mo.atkTimer>0) mo.atkTimer -= dt;
+
+    /* 护士长：看见你就尖叫，把更多东西引过来 */
+    if(t.scream && !mo.fake){
+      if(mo.screamCd === undefined) mo.screamCd = rand(5, 10);
+      mo.screamCd -= dt;
+      var sdx = player.pos.x - mo.pos.x, sdz = player.pos.z - mo.pos.z;
+      var sdist = Math.sqrt(sdx*sdx + sdz*sdz);
+      var smFloor = Math.abs(player.pos.y - mo.pos.y) < 1.4;
+      if(mo.screamCd <= 0 && sdist < 13 && smFloor){
+        mo.screamCd = 20;
+        try { AudioSys.shriek(); } catch(e){}
+        showMsg('护士长尖叫起来 · 更多东西被引来了！', 2.4);
+        noisePulse = Math.max(noisePulse, 3.2);
+        staticLevel = Math.max(staticLevel, 0.2);
+        var aliveN = 0;
+        for(var q=0; q<monsters.length; q++){ if(monsters[q].alive && !monsters[q].fake) aliveN++; }
+        if(aliveN < 9) spawnMonster('patient');
+      }
+    }
+
+    /* 巨躯病人：靠近时地面震动 */
+    if(t.brute && !mo.fake){
+      var bdx = player.pos.x - mo.pos.x, bdz = player.pos.z - mo.pos.z;
+      if(Math.sqrt(bdx*bdx + bdz*bdz) < 7.5 && Math.abs(player.pos.y - mo.pos.y) < 1.6){
+        cameraShake = Math.min(cameraShake + dt*0.4, 0.11);
+      }
+    }
 
     var dx = player.pos.x - mo.pos.x, dz = player.pos.z - mo.pos.z;
     var dist = Math.sqrt(dx*dx+dz*dz);
@@ -3291,7 +3463,7 @@ function updateMonsters(dt){
           resolveCircle(mo.pos, t.radius, wallsByFloor[mo.floor]);
         }
         // 病人/八尺会自己撞开门
-        if(mo.type==='patient' || mo.type==='doctor' || mo.type==='hachishaku'){
+        if(mo.type==='patient' || mo.type==='doctor' || mo.type==='hachishaku' || mo.type==='matron' || mo.type==='brute'){
           for(var di=0; di<doors.length; di++){
             var dd = doors[di];
             if(dd.floor !== mo.floor || dd.ang > 0.9) continue;
@@ -3302,14 +3474,14 @@ function updateMonsters(dt){
                 dd.bangT = (dd.bangT||0) + dt;
                 dd.g.rotation.z = Math.sin(dd.bangT*28) * 0.05 * Math.min(1, dd.bangT*2);
                 if(Math.random() < dt*2.2) AudioSys.bang();
-                if(dd.bangT > 3.5){
+                if(dd.bangT > (t.brute ? 1.6 : 3.5)){
                   dd.locked = false; dd.bangT = 0; dd.g.rotation.z = 0;
                   openDoor(dd);
                   showMsg('门被撞开了！', 2);
                 }
               } else {
                 dd.doorT = (dd.doorT||0) + dt;
-                if(dd.doorT > (mo.type==='hachishaku' ? 0.8 : 1.5)){ openDoor(dd); dd.doorT = 0; }
+                if(dd.doorT > (mo.type==='hachishaku' ? 0.8 : (t.brute ? 1.0 : 1.5))){ openDoor(dd); dd.doorT = 0; }
               }
             }
           }
@@ -3478,6 +3650,82 @@ function showScreen(title, sub, btn, winState){
   wrap.appendChild(en); wrap.appendChild(h); wrap.appendChild(line); wrap.appendChild(d); wrap.appendChild(b);
   elScreen.appendChild(wrap);
   b.addEventListener('pointerdown', function(e){ e.preventDefault(); location.reload(); });
+}
+
+/* ---------------- 燃烧弹（投掷火焰） ---------------- */
+var firePools = [];
+function makeFlameMat(){
+  return new THREE.MeshBasicMaterial({color:0xff8a20, transparent:true, opacity:0.8,
+    blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, fog:false});
+}
+function throwFirebomb(){
+  var dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  var m = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.045,0.2,8),
+    new THREE.MeshStandardMaterial({color:0x6a4a22, roughness:0.3, transparent:true, opacity:0.9}));
+  m.position.copy(camera.position); m.position.y -= 0.15;
+  scene.add(m);
+  firePools.push({m:m, flying:true, t:0, life:11, light:null, flames:[], x:0, z:0, vy:0,
+    vx:dir.x*11, vy:dir.y*11 + 2.8, vz:dir.z*11});
+  try { AudioSys.pickup(); } catch(e){}
+  showMsg('投出燃烧弹', 1);
+}
+function updateFirePools(dt){
+  for(var i=firePools.length-1;i>=0;i--){
+    var p = firePools[i];
+    p.t += dt;
+    if(p.flying){
+      p.vy -= dt*13;
+      p.m.position.x += p.vx*dt;
+      p.m.position.y += p.vy*dt;
+      p.m.position.z += p.vz*dt;
+      p.m.rotation.x += dt*9; p.m.rotation.z += dt*7;
+      var gy = floorY(currentFloor) + 0.08;
+      if(p.m.position.y <= gy || p.t > 4){
+        p.flying = false;
+        p.x = p.m.position.x; p.z = p.m.position.z;
+        p.m.visible = false;
+        var lt = new THREE.PointLight(0xff7a22, 2.4, 13, 2);
+        lt.position.set(p.x, floorY(currentFloor)+0.95, p.z);
+        scene.add(lt); p.light = lt;
+        for(var f=0; f<4; f++){
+          var fm = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.6), makeFlameMat());
+          fm.position.set(p.x, floorY(currentFloor)+0.62, p.z);
+          fm.rotation.y = (Math.PI/4)*f;
+          scene.add(fm); p.flames.push(fm);
+        }
+        try { AudioSys.bang(); AudioSys.flame(); } catch(e){}
+        showMsg('燃烧弹引爆 · 火焰封锁', 1.6);
+      }
+    } else {
+      p.life -= dt;
+      var k = clamp(p.life/11, 0, 1);
+      var fl = 0.78 + Math.sin(p.t*17)*0.10 + Math.random()*0.12;
+      for(var fi=0; fi<p.flames.length; fi++){
+        var fm2 = p.flames[fi];
+        fm2.material.opacity = 0.82 * k * fl;
+        fm2.scale.set(1 + Math.sin(p.t*9 + fi)*0.12, 0.9 + Math.sin(p.t*13 + fi*2)*0.22, 1);
+        fm2.lookAt(camera.position.x, fm2.position.y, camera.position.z);
+      }
+      if(p.light) p.light.intensity = (1.7 + Math.random()*1.2) * (0.35 + k*0.65);
+      /* 灼烧范围内的怪物 */
+      for(var mi=0; mi<monsters.length; mi++){
+        var mo = monsters[mi];
+        if(!mo.alive || mo.fake || mo.floor !== currentFloor) continue;
+        var dx2 = mo.pos.x - p.x, dz2 = mo.pos.z - p.z;
+        if(dx2*dx2 + dz2*dz2 < 7.3){
+          mo.hp -= dt*58;
+          if(Math.random() < dt*6) spawnBlood(mo.pos.x, mo.pos.y + 0.9, mo.pos.z, 1);
+          if(mo.hp <= 0) killMonster(mo);
+        }
+      }
+      if(p.life <= 0){
+        if(p.light) scene.remove(p.light);
+        for(var fj=0; fj<p.flames.length; fj++) scene.remove(p.flames[fj]);
+        scene.remove(p.m);
+        firePools.splice(i, 1);
+      }
+    }
+  }
 }
 
 /* ---------------- 荧光棒（可投掷的应急光源） ---------------- */
