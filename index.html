@@ -209,16 +209,23 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
   position:absolute; left:14%; right:14%; top:11%; bottom:25%;
   border:3px solid #07080a; border-radius:3px;
   background: repeating-linear-gradient(180deg,
-    rgba(25,29,34,0.99) 0px, rgba(25,29,34,0.99) 21px,
-    rgba(170,180,195,0.15) 21px, rgba(170,180,195,0.15) 24px,
-    rgba(0,0,0,0) 24px, rgba(0,0,0,0) 33px);
+    rgba(23,27,32,0.985) 0px, rgba(23,27,32,0.985) 17px,
+    rgba(190,200,215,0.22) 17px, rgba(190,200,215,0.22) 20px,
+    rgba(0,0,0,0) 20px, rgba(0,0,0,0) 36px);
   box-shadow: inset 0 0 32px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.05), 0 8px 22px rgba(0,0,0,0.75);
 }
 /* 门外透进来的微光/影 */
 #hideglow {
   position:absolute; left:14%; right:14%; top:11%; bottom:25%;
-  background:linear-gradient(180deg, rgba(120,150,190,0.06), rgba(0,0,0,0.06));
-  mix-blend-mode:screen; opacity:0.55;
+  background:linear-gradient(180deg, rgba(120,150,190,0.07), rgba(0,0,0,0.05));
+  mix-blend-mode:screen; opacity:0.6;
+}
+/* 门缝：左右两侧各一条细亮线（走廊灯光从缝里透进来） */
+#hideview::after {
+  content:''; position:absolute; left:9.5%; right:9.5%; top:6%; bottom:22.5%;
+  border-left:1px solid rgba(190,210,235,0.12);
+  border-right:1px solid rgba(190,210,235,0.12);
+  pointer-events:none;
 }
 /* 门锁立把手 */
 #hidelock {
