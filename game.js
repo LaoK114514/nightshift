@@ -2853,6 +2853,18 @@ function resetGame(){
   spawnStickPack(12.5, -13.5, 1);  // 2F 病房I
   spawnStickPack(6.2, 5.1, 2);     // 3F 天台东侧
   /* 藏身柜 */
+  /* 先清掉上一局的衣柜（含碰撞体），避免重开时叠加 */
+  for(var lk0=lockers.length-1; lk0>=0; lk0--){
+    var L0 = lockers[lk0];
+    scene.remove(L0.g);
+    var wl0 = wallsByFloor[L0.floor];
+    if(wl0){
+      for(var wj=wl0.length-1; wj>=0; wj--){
+        if(Math.abs(wl0[wj].minX - (L0.x-0.5)) < 0.6 && Math.abs(wl0[wj].minZ - (L0.z-0.5)) < 0.6) wl0.splice(wj,1);
+      }
+    }
+  }
+  lockers.length = 0;
   /* 衣柜一律背靠墙面、柜门朝向走廊（正着放） */
   spawnLocker(-9,   1.62, 0, Math.PI);        /* 主走廊北墙 → 门朝 -Z */
   spawnLocker(9.4,  1.62, 0, Math.PI);
@@ -2913,7 +2925,7 @@ function update(dt){
 }
 function updateInner(dt){
   if(!started || gameOver) return;
-  if(devPanelOpen) return;                       /* 开发者面板打开时暂停 */
+  if(devPanelOpen && !training) return;          /* 开发者面板暂停；训练场面板不暂停（否则刷出来的敌人看着像卡住） */
 
   if(!training) elapsed += dt * (dev.on && dev.fast ? 5 : 1); /* 训练场不计时 */
 
@@ -3328,6 +3340,15 @@ function updateMonsters(dt){
     if(!mo.alive) continue;
     if(dev.on && dev.freeze) continue;
 
+    try { updateOneMonster(mo, t, dt, i); }
+    catch(e){
+      /* 单个怪物出错只记录，绝不影响其它怪物移动 */
+      if(!lastErrMsg) lastErrMsg = 'monster[' + mo.type + ']:' + (e && e.message);
+    }
+  }
+}
+function updateOneMonster(mo, t, dt, i){
+  {
     mo.bob += dt;
     if(mo.atkTimer>0) mo.atkTimer -= dt;
 
@@ -3390,7 +3411,7 @@ function updateMonsters(dt){
           killMonster(mo);
           showMsg('女鬼被强光驱散', 2.2);
           try { AudioSys.heal(); } catch(e){}
-          continue;
+          return;
         }
       } else {
         burn = Math.max(0, burn - dt*1.5);
@@ -3430,7 +3451,7 @@ function updateMonsters(dt){
       mo.mesh.position.x = mo.pos.x; mo.mesh.position.z = mo.pos.z;
       mo.dist = dist;
       animateLimbs(mo, dt);
-      continue;
+      return;
     }
     if(mo.fake){
       /* 幻视：闪烁的假怪物，靠近就消散，不会伤害你 */
@@ -3441,7 +3462,7 @@ function updateMonsters(dt){
         scene.remove(mo.mesh);
         monsters.splice(i, 1);
         try { AudioSys.whisper(); } catch(e){}
-        continue;
+        return;
       }
     }
     if(t.blind){
@@ -3486,7 +3507,7 @@ function updateMonsters(dt){
         if(mo.type==='patient' || mo.type==='doctor' || mo.type==='hachishaku' || mo.type==='matron' || mo.type==='brute'){
           for(var di=0; di<doors.length; di++){
             var dd = doors[di];
-            if(dd.floor !== mo.floor || dd.ang > 0.9) continue;
+            if(dd.floor !== mo.floor || dd.ang > 0.9) return;
             var ccx = clamp(mo.pos.x, dd.minX, dd.maxX), ccz = clamp(mo.pos.z, dd.minZ, dd.maxZ);
             var dxx = mo.pos.x - ccx, dzz = mo.pos.z - ccz;
             if(dxx*dxx + dzz*dzz < 0.85){
@@ -4028,6 +4049,7 @@ function trainFrontSpot(km){
 function trainAction(kind, val){
   if(kind === 'mon'){
     devSpawnAt(val);
+    closeTrainPanel();                 /* 刷完立刻关面板，游戏继续跑 */
   } else if(kind === 'item'){
     var sp2 = trainFrontSpot(2.6);
     if(val === 'med') spawnHealthPack(sp2[0], sp2[1], currentFloor);
