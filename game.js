@@ -42,6 +42,7 @@ var elSanityState = $('sanitystate');
 var elObjectives = $('objectives');
 var elStickbtn = $('stickbtn');
 var elHidebtn = $('hidebtn'), elHideView = $('hideview');
+var elDoorFill = $('doorfill');
 var elRotate = $('rotate');
 var elScreen = $('screen'), elStartBtn = $('startbtn');
 
@@ -1590,6 +1591,12 @@ function buildAllFloors(){
 
 /* ---------------- 房门系统 ---------------- */
 var doors = [];
+function doDoorAction(d){
+  if(!d) return;
+  if(d.locked) toggleLock(d);
+  else if(d.ang > 0.5) toggleLock(d);
+  else openDoor(d);
+}
 function openDoor(d){
   if(!d || d.target !== 0 || d.locked) return;
   d.target = 1.75;
@@ -1676,16 +1683,20 @@ elDiffbtn.addEventListener('pointerdown', function(e){
   elDiffbtn.textContent = difficulty === 1 ? '难度 · 普通' : '难度 · 困难';
   AudioSys.pickup();
 });
+/* 门按钮：必须长按 0.4 秒才生效（防误触） */
 elDoorbtn.addEventListener('pointerdown', function(e){
-  e.preventDefault();
-  var di = +elDoorbtn.dataset.door;
-  if(di >= 0 && doors[di]){
-    var dd = doors[di];
-    if(dd.locked) toggleLock(dd);
-    else if(dd.ang > 0.5) toggleLock(dd);
-    else openDoor(dd);
-  }
+  e.preventDefault(); e.stopPropagation();
+  doorHolding = true; doorHoldT = 0;
+  elDoorbtn.classList.add('holding');
 });
+var doorRelease = function(){
+  doorHolding = false; doorHoldT = 0;
+  if(elDoorFill) elDoorFill.style.width = '0%';
+  elDoorbtn.classList.remove('holding');
+};
+elDoorbtn.addEventListener('pointerup', doorRelease);
+elDoorbtn.addEventListener('pointercancel', doorRelease);
+elDoorbtn.addEventListener('pointerleave', doorRelease);
 /* ---------------- 粒子 ---------------- */
 var particles = [];
 function spawnBlood(x,y,z,n){
@@ -1744,6 +1755,7 @@ var DEV_PASS = 'zzs';
 var dev = { on:false, god:false, infAmmo:false, infStam:false, infFlash:false,
             oneShot:false, freeze:false, fast:false, debug:false, noSanity:false };
 var devPanelOpen = false, devTaps = 0, devTapTimer = 0;
+var doorHoldT = 0, doorHolding = false;   /* 门按钮长按进度 */
 var noiseLevel = 0;      /* 动静/暴露度：跑步与开灯会拉高，怪物更容易发现你 */
 var runHeld = false;
 var magDrops = [];
@@ -2642,7 +2654,8 @@ function resetGame(){
   player.sticks = 3; updateStickHud();
   player.hiding = false; player.hideLocker = null;
   if(elHideView) elHideView.classList.remove('on');
-  for(var lk=0; lk<lockers.length; lk++){ lockers[lk].discovered = false; lockers[lk].discT = 0; }
+  for(var lk=0; lk<lockers.length; lk++){ lockers[lk].discovered = false; lockers[lk].discT = 0; lockers[lk].warnedA = false; lockers[lk].warnedB = false; }
+  doorHolding = false; doorHoldT = 0;
   for(var skp=stickPacks.length-1; skp>=0; skp--){ scene.remove(stickPacks[skp].g); }
   stickPacks.length = 0;
   lightMul = 1; eventSpeedMul = 1; eventActive = ''; eventTimer = rand(40, 60); lastEvent = ''; noisePulse = 0;
@@ -2740,7 +2753,16 @@ function updateInner(dt){
     else {
       player.hideT += dt;
       if(!HL.discovered) achState.hidT += dt;
-      player.sanity = Math.min(player.sanityMax, player.sanity + dt*4.5);
+      /* 前 8 秒喘息恢复；之后幽闭恐惧逐渐侵蚀理智 */
+      if(player.hideT <= 8){
+        player.sanity = Math.min(player.sanityMax, player.sanity + dt*4.5);
+      } else {
+        var suff = player.hideT - 8;
+        player.sanity = Math.max(0, player.sanity - dt*(2.6 + suff*0.55));
+        if(suff > 4 && !HL.warnedA){ HL.warnedA = true; showMsg('柜子里很闷 … 有点喘不过气', 2); }
+        if(suff > 10 && !HL.warnedB){ HL.warnedB = true; showMsg('幽闭恐惧发作 · 快出去！', 2); try { AudioSys.whisper(); } catch(e){} }
+        if(Math.random() < dt*0.7) staticLevel = Math.max(staticLevel, 0.14);
+      }
       player.stamina = Math.min(player.staminaMax, player.stamina + dt*22);
       player.boostT = Math.max(0, player.boostT);
       camera.position.set(HL.x + Math.sin(HL.rotY)*0.06, floorY(currentFloor)+1.42, HL.z + Math.cos(HL.rotY)*0.06);
@@ -2751,6 +2773,17 @@ function updateInner(dt){
         HL.discT += dt;
         if(HL.discT > 0.5 && HL.discT < 3.4 && Math.random() < dt*3) { try { AudioSys.bang(); } catch(e){} }
         if(HL.discT >= 3.5){ exitLocker(true); }
+      }
+      /* 理智过低 → 强行撞开柜门逃出（并制造动静） */
+      if(player.sanity <= player.sanityMax*0.2 && player.hideT > 8){
+        showMsg('你撞开柜门冲了出来！', 2.4);
+        cameraShake = 0.28;
+        noisePulse = Math.max(noisePulse, 2.0);
+        staticLevel = Math.max(staticLevel, 0.4);
+        try { AudioSys.bang(); } catch(e){}
+        exitLocker(false);
+        updateHud(); updateObjectives();
+        return;
       }
       updateDoors(dt);
       updateHud(); updateObjectives();
@@ -2873,6 +2906,9 @@ function updateInner(dt){
     var lbl = nDoor.locked ? '解锁' : (nDoor.ang > 0.5 ? '锁门' : '开门');
     var lb = elDoorbtn.querySelector('span');
     if(lb) lb.textContent = lbl;
+    elDoorbtn.classList.toggle('st-open', !nDoor.locked && nDoor.ang <= 0.5);
+    elDoorbtn.classList.toggle('st-lock', !nDoor.locked && nDoor.ang > 0.5);
+    elDoorbtn.classList.toggle('st-unlock', !!nDoor.locked);
   } else {
     elDoorbtn.style.display = 'none';
   }
@@ -2882,13 +2918,22 @@ function updateInner(dt){
     else if(nLocker){ elHidebtn.style.display = 'flex'; if(elHidebtn.querySelector('span')) elHidebtn.querySelector('span').textContent = '躲藏'; }
     else elHidebtn.style.display = 'none';
   }
+  /* 门按钮：长按 0.4 秒才生效，避免误触 */
+  if(doorHolding && nDoor){
+    doorHoldT += dt;
+    if(elDoorFill) elDoorFill.style.width = Math.min(100, (doorHoldT/0.4)*100) + '%';
+    if(doorHoldT >= 0.4){
+      doorHolding = false; doorHoldT = 0;
+      if(elDoorFill) elDoorFill.style.width = '0%';
+      doDoorAction(nDoor);
+    }
+  } else if(doorHoldT !== 0){
+    doorHoldT = 0;
+    if(elDoorFill) elDoorFill.style.width = '0%';
+  }
   if(keys['KeyE']){
     keys['KeyE'] = false;
-    if(nDoor){
-      if(nDoor.locked) toggleLock(nDoor);
-      else if(nDoor.ang > 0.5) toggleLock(nDoor);
-      else openDoor(nDoor);
-    }
+    if(nDoor) doDoorAction(nDoor);
   }
 
   /* --- 门动画 --- */
