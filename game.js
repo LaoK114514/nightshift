@@ -1679,7 +1679,7 @@ if(elGfxbtn) elGfxbtn.addEventListener('pointerdown', function(e){
 });
 elDiffbtn.addEventListener('pointerdown', function(e){
   e.preventDefault();
-  difficulty = difficulty === 1 ? 1.5 : 1;
+  difficulty = difficulty === 1 ? 1.3 : 1;
   elDiffbtn.textContent = difficulty === 1 ? '难度 · 普通' : '难度 · 困难';
   AudioSys.pickup();
 });
@@ -1842,13 +1842,13 @@ function addHand(parent, x, y, z){
 
 /* ---------------- 怪物 ---------------- */
 var MONSTER_TYPES = {
-  patient:    {hp:60,  speed:2.1, dmg:10, radius:0.45, height:1.7, halfH:0.85, atkR:1.45, atkCd:1.0},
-  crawler:    {hp:45,  speed:3.3, dmg:11, radius:0.42, height:1.0, halfH:0.5,  atkR:1.25, atkCd:0.7},
-  blind:      {hp:130, speed:1.3, dmg:24, radius:0.5,  height:1.95, halfH:0.98, atkR:1.75, atkCd:1.1, blind:true},
-  doctor:     {hp:90,  speed:2.7, dmg:13, radius:0.45, height:1.8, halfH:0.9,  atkR:1.5,  atkCd:0.9},
-  ghost:      {hp:90,  speed:2.9, dmg:14, radius:0.5,  height:1.6, halfH:0.8,  atkR:1.55, atkCd:0.9, ghost:true},
-  hachishaku: {hp:300, speed:1.5, dmg:24, radius:0.6,  height:2.6, halfH:1.3,  atkR:1.9,  atkCd:1.1},
-  slender:    {hp:200, speed:2.3, dmg:18, radius:0.45, height:2.7, halfH:1.35, atkR:1.8,  atkCd:1.0, slender:true}
+  patient:    {hp:60,  speed:2.0, dmg:7,  radius:0.45, height:1.7, halfH:0.85, atkR:1.45, atkCd:1.35},
+  crawler:    {hp:45,  speed:2.9, dmg:8,  radius:0.42, height:1.0, halfH:0.5,  atkR:1.25, atkCd:1.0},
+  blind:      {hp:130, speed:1.2, dmg:17, radius:0.5,  height:1.95, halfH:0.98, atkR:1.75, atkCd:1.5, blind:true},
+  doctor:     {hp:90,  speed:2.4, dmg:9,  radius:0.45, height:1.8, halfH:0.9,  atkR:1.5,  atkCd:1.25},
+  ghost:      {hp:90,  speed:2.7, dmg:10, radius:0.5,  height:1.6, halfH:0.8,  atkR:1.55, atkCd:1.25, ghost:true},
+  hachishaku: {hp:300, speed:1.4, dmg:18, radius:0.6,  height:2.6, halfH:1.3,  atkR:1.9,  atkCd:1.5},
+  slender:    {hp:200, speed:2.1, dmg:13, radius:0.45, height:2.7, halfH:1.35, atkR:1.8,  atkCd:1.35, slender:true}
 };
 var monsters = [];
 var spawnTimers = {};
@@ -2082,7 +2082,7 @@ function spawnMonster(type){
   if(!pts || pts.length === 0) return;
   var cand = [];
   for(var i=0;i<pts.length;i++){
-    if(dist2(player.pos.x,player.pos.z, pts[i][0], pts[i][1]) > (140 - noiseLevel*55)) cand.push(pts[i]);
+    if(dist2(player.pos.x,player.pos.z, pts[i][0], pts[i][1]) > (230 - noiseLevel*30)) cand.push(pts[i]);
   }
   if(cand.length===0) cand = pts;
   var sp = cand[randi(0,cand.length-1)];
@@ -2243,13 +2243,13 @@ function updateHealthPacks(dt){
     p.glow.material.opacity = 0.3 + Math.sin(p.t*3)*0.15;
     if(p.floor===currentFloor && dist2(player.pos.x, player.pos.z, p.x, p.z) < 2.2){
       if(player.hp >= player.maxHp) continue;
-      player.hp = Math.min(player.maxHp, player.hp + 25);
+      player.hp = Math.min(player.maxHp, player.hp + 35);
       player.medUsed++;
       scene.remove(p.g);
       healthPacks.splice(i,1);
       healFlash = 1;
       AudioSys.heal();
-      showMsg('使用急救包 · 生命 +25', 1.8);
+      showMsg('使用急救包 · 生命 +35', 1.8);
       updateHud();
     }
   }
@@ -2658,7 +2658,7 @@ function resetGame(){
   doorHolding = false; doorHoldT = 0;
   for(var skp=stickPacks.length-1; skp>=0; skp--){ scene.remove(stickPacks[skp].g); }
   stickPacks.length = 0;
-  lightMul = 1; eventSpeedMul = 1; eventActive = ''; eventTimer = rand(40, 60); lastEvent = ''; noisePulse = 0;
+  lightMul = 1; eventSpeedMul = 1; eventActive = ''; eventTimer = rand(60, 85); lastEvent = ''; noisePulse = 0;
   rollObjectives();
   if(PostFX && PostFX.setMood) PostFX.setMood(1);
   flashCharge = 1;
@@ -2754,11 +2754,11 @@ function updateInner(dt){
       player.hideT += dt;
       if(!HL.discovered) achState.hidT += dt;
       /* 前 8 秒喘息恢复；之后幽闭恐惧逐渐侵蚀理智 */
-      if(player.hideT <= 8){
+      if(player.hideT <= 14){
         player.sanity = Math.min(player.sanityMax, player.sanity + dt*4.5);
       } else {
-        var suff = player.hideT - 8;
-        player.sanity = Math.max(0, player.sanity - dt*(2.6 + suff*0.55));
+        var suff = player.hideT - 14;
+        player.sanity = Math.max(0, player.sanity - dt*(1.6 + suff*0.3));
         if(suff > 4 && !HL.warnedA){ HL.warnedA = true; showMsg('柜子里很闷 … 有点喘不过气', 2); }
         if(suff > 10 && !HL.warnedB){ HL.warnedB = true; showMsg('幽闭恐惧发作 · 快出去！', 2); try { AudioSys.whisper(); } catch(e){} }
         if(Math.random() < dt*0.7) staticLevel = Math.max(staticLevel, 0.14);
@@ -2775,7 +2775,7 @@ function updateInner(dt){
         if(HL.discT >= 3.5){ exitLocker(true); }
       }
       /* 理智过低 → 强行撞开柜门逃出（并制造动静） */
-      if(player.sanity <= player.sanityMax*0.2 && player.hideT > 8){
+      if(player.sanity <= player.sanityMax*0.12 && player.hideT > 14){
         showMsg('你撞开柜门冲了出来！', 2.4);
         cameraShake = 0.28;
         noisePulse = Math.max(noisePulse, 2.0);
@@ -2818,9 +2818,9 @@ function updateInner(dt){
   if(dev.on && dev.infStam){
     player.stamina = player.staminaMax; player.exhausted = false;
   } else if(sprinting){
-    player.stamina = Math.max(0, player.stamina - dt*26);   /* 满体力约可跑 7.7 秒 */
+    player.stamina = Math.max(0, player.stamina - dt*21);   /* 满体力约可跑 9.5 秒 */
   } else {
-    player.stamina = Math.min(player.staminaMax, player.stamina + dt*(player.exhausted?11:18));
+    player.stamina = Math.min(player.staminaMax, player.stamina + dt*(player.exhausted?15:24));
   }
   if(player.stamina <= 0 && !player.exhausted){
     player.exhausted = true;
@@ -2841,9 +2841,9 @@ function updateInner(dt){
     if(mdd < nearestD) nearestD = mdd;
   }
   var sDelta = 0;
-  if(!flashOn) sDelta -= 2.4;                                  /* 黑暗侵蚀 */
-  if(nearestD < 12) sDelta -= (12 - nearestD) * 0.34;           /* 恐惧 */
-  if(flashOn && nearestD > 14) sDelta += 1.7;                   /* 安全恢复 */
+  if(!flashOn) sDelta -= 1.6;                                  /* 黑暗侵蚀（降低） */
+  if(nearestD < 12) sDelta -= (12 - nearestD) * 0.22;           /* 恐惧（降低） */
+  if(flashOn && nearestD > 14) sDelta += 2.6;                   /* 安全恢复（提高） */
   if(player.boostT > 0) sDelta += 1.2;                          /* 镇静剂安定 */
   if(dev.on && dev.noSanity){
     player.sanity = player.sanityMax;
@@ -2861,17 +2861,17 @@ function updateInner(dt){
   if(player.sanity <= 0){
     sanityBreakT += dt;
     achState.madT += dt;
-    if(sanityBreakT >= 1){ sanityBreakT = 0; damagePlayer(3, null); showMsg('精神崩溃 · 理智耗尽', 1.2); }
+    if(sanityBreakT >= 1){ sanityBreakT = 0; damagePlayer(2, null); showMsg('精神崩溃 · 理智耗尽', 1.2); }
   } else sanityBreakT = 0;
 
   /* 枪声动静衰减 */
   if(noisePulse > 0) noisePulse = Math.max(0, noisePulse - dt*0.7);
 
   /* --- 幻视：理智低时出现假怪物 --- */
-  if(sRatio < 0.42 && !dev.freeze){
+  if(sRatio < 0.28 && !dev.freeze){
     var fakeCount = 0;
     for(var fc=0; fc<monsters.length; fc++){ if(monsters[fc].fake) fakeCount++; }
-    if(fakeCount < 3 && Math.random() < dt*(0.42 - sRatio)*0.85){
+    if(fakeCount < 2 && Math.random() < dt*(0.28 - sRatio)*0.6){
       var fakeTypes = ['patient','crawler','doctor','ghost'];
       var ft = fakeTypes[randi(0, fakeTypes.length-1)];
       var ang = rand(0, 6.28), rdist = rand(9, 17);
@@ -3063,11 +3063,11 @@ function updateInner(dt){
     healFlash = Math.max(0, healFlash - dt*1.8);
     elHeal.style.opacity = healFlash*0.55;
   }
-  if(player.hp > 0 && player.hp < 20 && !gameOver){
+  if(player.hp > 0 && player.hp < 35 && !gameOver){
     regenT = (regenT||0) + dt;
-    if(regenT >= 3){
+    if(regenT >= 2.5){
       regenT = 0;
-      player.hp = Math.min(20, player.hp + 1);
+      player.hp = Math.min(35, player.hp + 2);
       updateHud();
     }
   } else {
@@ -3101,15 +3101,15 @@ function updateInner(dt){
 
 function updateSpawning(dt){
   var t = elapsed;
-  var dmul = difficulty * (1 + (night-1)*0.28);   /* 每过一夜更难 */
+  var dmul = difficulty * (1 + (night-1)*0.16);   /* 每过一夜更难（放缓） */
   var want = {
-    patient: Math.round(Math.min(1 + Math.floor(t/45), 3) * dmul),
-    crawler: t>35 ? Math.round(Math.min(1 + Math.floor((t-35)/70), 2) * dmul) : 0,
-    blind: t>60 ? Math.round(Math.min(1 + Math.floor((t-60)/120), 2) * dmul) : 0,
-    doctor: t>75 ? Math.round(Math.min(1 + Math.floor((t-75)/85), 2) * dmul) : 0,
-    ghost: t>50 ? Math.round(Math.min(1 + Math.floor((t-50)/90), 2) * dmul) : 0,
-    hachishaku: t>90 ? Math.round(1 * dmul) : 0,
-    slender: t>160 ? 1 : 0
+    patient: Math.round(Math.min(1 + Math.floor(t/70), 2) * dmul),
+    crawler: t>50 ? Math.round(Math.min(1 + Math.floor((t-50)/110), 1) * dmul) : 0,
+    blind: t>95 ? Math.round(Math.min(1 + Math.floor((t-95)/150), 1) * dmul) : 0,
+    doctor: t>105 ? Math.round(Math.min(1 + Math.floor((t-105)/120), 1) * dmul) : 0,
+    ghost: t>70 ? Math.round(Math.min(1 + Math.floor((t-70)/130), 1) * dmul) : 0,
+    hachishaku: t>130 ? Math.round(1 * dmul) : 0,
+    slender: t>200 ? 1 : 0
   };
   var names = ['patient','crawler','blind','doctor','ghost','hachishaku','slender'];
   for(var n=0;n<names.length;n++){
@@ -3120,7 +3120,7 @@ function updateSpawning(dt){
     for(var i=0;i<monsters.length;i++){ if(monsters[i].alive && monsters[i].type===nm && monsters[i].floor===currentFloor) count++; }
     if(count < want[nm] && spawnTimers[nm] <= 0){
       spawnMonster(nm);
-      spawnTimers[nm] = 1.0 / (1 + noiseLevel*0.6);
+      spawnTimers[nm] = 1.0 / (1 + noiseLevel*0.3);
     }
   }
 }
@@ -3147,7 +3147,7 @@ function updateMonsters(dt){
     var dist = Math.sqrt(dx*dx+dz*dz);
     mo.dist = dist;
     var sameFloor = Math.abs(player.pos.y - mo.pos.y) < 1.4;
-    var sp = t.speed * (1 + noiseLevel*0.16) * (1 + (night-1)*0.06) * eventSpeedMul;
+    var sp = t.speed * (1 + noiseLevel*0.09) * (1 + (night-1)*0.035) * eventSpeedMul;
 
     /* --- 手电强光灼烧女鬼：正对着照满 5 秒即驱散 --- */
     if(t.ghost && !mo.fake){
@@ -3232,8 +3232,8 @@ function updateMonsters(dt){
     if(t.blind){
       /* 盲眼：完全靠声音定位 */
       var loud = Math.max(noiseLevel, noisePulse);
-      sp = (loud > 0.5) ? (t.speed*3.2 + loud*0.9) : (t.speed*0.22);
-      sp *= (1 + (night-1)*0.06) * eventSpeedMul;
+      sp = (loud > 0.5) ? (t.speed*2.5 + loud*0.5) : (t.speed*0.22);
+      sp *= (1 + (night-1)*0.035) * eventSpeedMul;
       mo.heading = (loud > 0.5);
     }
 
@@ -3242,7 +3242,7 @@ function updateMonsters(dt){
       var toSlender = new THREE.Vector3(mo.pos.x-camera.position.x, (mo.pos.y+t.halfH)-camera.position.y, mo.pos.z-camera.position.z).normalize();
       var dot = toSlender.dot(cameraDir);
       if(dot > 0.985){ frozen = true; }
-      if(frozen){ sp = 0; } else { sp = t.speed*1.35*(1 + noiseLevel*0.16); }
+      if(frozen){ sp = 0; } else { sp = t.speed*1.28*(1 + noiseLevel*0.09); }
       if(dist < 12){
         var inView = dot > 0.985;
         staticLevel = Math.max(staticLevel, (inView?0.55:0.25) * clamp(1 - dist/12, 0.15, 1));
@@ -3556,14 +3556,14 @@ function triggerEvent(){
     showMsg('停电了 · 整层楼陷入黑暗', 2.6);
     try { AudioSys.empty(); AudioSys.whisper(); } catch(e){}
   } else if(pick === 'bloodmoon'){
-    eventT = 22; eventSpeedMul = 1.35;
+    eventT = 18; eventSpeedMul = 1.18;
     scene.fog.color.set(0x2a0a0a);
     showMsg('血月升起 · 它们变得狂躁', 2.6);
     try { AudioSys.roar(); } catch(e){}
   } else if(pick === 'whisper'){
     eventT = 2;
-    player.sanity = Math.max(0, player.sanity - 18);
-    showMsg('无数低语钻进耳朵 · 理智 -18', 2.6);
+    player.sanity = Math.max(0, player.sanity - 10);
+    showMsg('无数低语钻进耳朵 · 理智 -10', 2.6);
     try { AudioSys.whisper(); } catch(e){}
   } else {
     eventT = 2;
@@ -3585,7 +3585,7 @@ function updateEvents(dt){
         eventSpeedMul = 1;
         scene.fog.color.set(currentFloor===FLOORS-1 ? 0x0a1424 : 0x04060c);
       }
-      eventActive = ''; eventTimer = rand(38, 62);
+      eventActive = ''; eventTimer = rand(55, 85);
     }
   } else {
     eventTimer -= dt;
