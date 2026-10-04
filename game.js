@@ -1742,7 +1742,7 @@ var rampTrack = { id:-1, t0:0 }, rampCooldown = 0;
 var flashOn = true;
 var DEV_PASS = 'zzs';
 var dev = { on:false, god:false, infAmmo:false, infStam:false, infFlash:false,
-            oneShot:false, freeze:false, fast:false, debug:false };
+            oneShot:false, freeze:false, fast:false, debug:false, noSanity:false };
 var devPanelOpen = false, devTaps = 0, devTapTimer = 0;
 var noiseLevel = 0;      /* 动静/暴露度：跑步与开灯会拉高，怪物更容易发现你 */
 var runHeld = false;
@@ -2812,7 +2812,11 @@ function updateInner(dt){
   if(nearestD < 12) sDelta -= (12 - nearestD) * 0.34;           /* 恐惧 */
   if(flashOn && nearestD > 14) sDelta += 1.7;                   /* 安全恢复 */
   if(player.boostT > 0) sDelta += 1.2;                          /* 镇静剂安定 */
-  player.sanity = clamp(player.sanity + sDelta*dt, 0, player.sanityMax);
+  if(dev.on && dev.noSanity){
+    player.sanity = player.sanityMax;
+  } else {
+    player.sanity = clamp(player.sanity + sDelta*dt, 0, player.sanityMax);
+  }
   var sRatio = player.sanity / player.sanityMax;
   if(PostFX && PostFX.setMood) PostFX.setMood(clamp(sRatio, 0, 1));
   if(sRatio < 0.55) staticLevel = Math.max(staticLevel, (1-sRatio)*0.22);
@@ -3099,6 +3103,55 @@ function updateMonsters(dt){
     mo.dist = dist;
     var sameFloor = Math.abs(player.pos.y - mo.pos.y) < 1.4;
     var sp = t.speed * (1 + noiseLevel*0.16) * (1 + (night-1)*0.06) * eventSpeedMul;
+
+    /* --- 手电强光灼烧女鬼：正对着照满 5 秒即驱散 --- */
+    if(t.ghost && !mo.fake){
+      var burn = mo.burnT || 0;
+      var lit = false;
+      if(flashOn && flashCharge > 0.02){
+        var tgx = mo.pos.x - camera.position.x;
+        var tgy = (mo.pos.y + t.halfH) - camera.position.y;
+        var tgz = mo.pos.z - camera.position.z;
+        var tgl = Math.sqrt(tgx*tgx + tgy*tgy + tgz*tgz);
+        if(tgl < 20 && tgl > 0.01){
+          var aimDot = (tgx/tgl)*cameraDir.x + (tgy/tgl)*cameraDir.y + (tgz/tgl)*cameraDir.z;
+          if(aimDot > 0.93) lit = true;
+        }
+      }
+      if(lit){
+        burn += dt;
+        if(!mo.burning){
+          mo.burning = true;
+          showMsg('强光灼烧 · 别移开手电', 1.6);
+          try { AudioSys.shriek(); } catch(e){}
+        }
+        if(burn >= 2.6 && !mo.burnWarn){ mo.burnWarn = true; showMsg('她快撑不住了！', 1.4); try { AudioSys.shriek(); } catch(e){} }
+        if(burn >= 5){
+          killMonster(mo);
+          showMsg('女鬼被强光驱散', 2.2);
+          try { AudioSys.heal(); } catch(e){}
+          continue;
+        }
+      } else {
+        burn = Math.max(0, burn - dt*1.5);
+        if(burn <= 0) mo.burning = false;
+      }
+      mo.burnT = burn;
+      /* 灼烧表现：颜色变热、裹尸布逐渐消散、身体颤抖、速度下降 */
+      var ud = mo.mesh.userData || {};
+      var bt = clamp(burn/5, 0, 1);
+      if(ud.glowMat){
+        ud.glowMat.uniforms.uColor.value.setRGB(0.87 + bt*0.13, 0.89 + bt*0.06, 0.92 - bt*0.58);
+        ud.glowMat.uniforms.uTime.value = elapsed;
+      }
+      if(ud.shroud) ud.shroud.material.opacity = 0.72 * (1 - bt*0.8);
+      if(burn > 0){
+        mo.mesh.position.x += rand(-0.035, 0.035);
+        mo.mesh.position.z += rand(-0.035, 0.035);
+        sp *= (1 - bt*0.65);
+        staticLevel = Math.max(staticLevel, bt*0.18);
+      }
+    }
     /* 玩家躲进柜子且没被发现 → 怪物失去目标，四处游荡 */
     if(player.hiding && player.hideLocker && !player.hideLocker.discovered && !mo.fake){
       sp *= 0.3;
@@ -3159,6 +3212,16 @@ function updateMonsters(dt){
         mo.pos.x += wantX; mo.pos.z += wantZ;
         resolveCircle(mo.pos, t.radius, wallsByFloor[mo.floor]);
         resolveDoors(mo.pos, t.radius, mo.floor);
+        /* 把怪物挡在玩家身体之外（女鬼可穿透） */
+        var minGap = t.radius + PLAYER_RADIUS;
+        var sx2 = mo.pos.x - player.pos.x, sz2 = mo.pos.z - player.pos.z;
+        var sd2 = Math.sqrt(sx2*sx2 + sz2*sz2);
+        if(sd2 < minGap){
+          if(sd2 < 0.0001){ sx2 = Math.cos(mo.bob); sz2 = Math.sin(mo.bob); sd2 = 1; }
+          mo.pos.x = player.pos.x + (sx2/sd2)*minGap;
+          mo.pos.z = player.pos.z + (sz2/sd2)*minGap;
+          resolveCircle(mo.pos, t.radius, wallsByFloor[mo.floor]);
+        }
         // 病人/八尺会自己撞开门
         if(mo.type==='patient' || mo.type==='doctor' || mo.type==='hachishaku'){
           for(var di=0; di<doors.length; di++){
@@ -3612,7 +3675,7 @@ var elDevMsg = $('devmsg'), elDevGrid = $('devgrid');
 var DEV_ITEMS = [
   ['god','无限生命','t'], ['infAmmo','无限子弹','t'], ['infStam','无限体力','t'],
   ['infFlash','手电不耗电','t'], ['oneShot','一击必杀','t'], ['freeze','冻结怪物','t'],
-  ['fast','时间加速 ×5','t'], ['debug','显示状态行','t'],
+  ['fast','时间加速 ×5','t'], ['noSanity','理智不减','t'], ['debug','显示状态行','t'],
   ['unlock','解锁全部武器','a'], ['heal','回满生命体力','a'], ['clear','清空场上怪物','a'],
   ['spawnP','刷出病人','a'], ['spawnC','刷出爬行者','a'], ['spawnG','刷出女鬼','a'],
   ['spawnH','刷出八尺大人','a'], ['dawn','立即天亮（胜利）','a']
