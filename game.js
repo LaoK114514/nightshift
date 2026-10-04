@@ -9,7 +9,7 @@ try {
 var NIGHT_DURATION = 240;
 var EYE_HEIGHT = 1.55;
 var PLAYER_RADIUS = 0.35;
-var WALK_SPEED = 3.2, SPRINT_SPEED = 5.0;
+var WALK_SPEED = 4.0, SPRINT_SPEED = 6.4;
 var FLOORS = 3;
 var FLOOR_H = 4.4;
 var FLOOR_NAMES = ['1F 病房层', '2F 实验层', '3F 天台'];
@@ -1834,9 +1834,9 @@ var MONSTER_TYPES = {
   crawler:    {hp:45,  speed:3.3, dmg:11, radius:0.42, height:1.0, halfH:0.5,  atkR:1.25, atkCd:0.7},
   blind:      {hp:130, speed:1.3, dmg:24, radius:0.5,  height:1.95, halfH:0.98, atkR:1.75, atkCd:1.1, blind:true},
   doctor:     {hp:90,  speed:2.7, dmg:13, radius:0.45, height:1.8, halfH:0.9,  atkR:1.5,  atkCd:0.9},
-  ghost:      {hp:90,  speed:3.5, dmg:14, radius:0.5,  height:1.6, halfH:0.8,  atkR:1.55, atkCd:0.9, ghost:true},
+  ghost:      {hp:90,  speed:2.9, dmg:14, radius:0.5,  height:1.6, halfH:0.8,  atkR:1.55, atkCd:0.9, ghost:true},
   hachishaku: {hp:300, speed:1.5, dmg:24, radius:0.6,  height:2.6, halfH:1.3,  atkR:1.9,  atkCd:1.1},
-  slender:    {hp:200, speed:2.9, dmg:18, radius:0.45, height:2.7, halfH:1.35, atkR:1.8,  atkCd:1.0, slender:true}
+  slender:    {hp:200, speed:2.3, dmg:18, radius:0.45, height:2.7, halfH:1.35, atkR:1.8,  atkCd:1.0, slender:true}
 };
 var monsters = [];
 var spawnTimers = {};
