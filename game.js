@@ -4048,6 +4048,8 @@ function trainAction(kind, val){
       updateHud(); showMsg('生命 / 体力 / 理智 / 电量 全部回满', 1.8);
     } else if(val === 'close'){
       closeTrainPanel();
+    } else if(val === 'menu'){
+      location.reload();
     }
   }
   try { AudioSys.pickup(); } catch(e){}
@@ -4077,7 +4079,7 @@ function buildTrainPanel(){
   section('生成道具');
   grid(TRAIN_ITEM, 'item');
   section('场地操作');
-  grid([['heal','回满状态'],['clear','清空敌人'],['close','关闭面板']], 'act');
+  grid([['heal','回满状态'],['clear','清空敌人'],['close','关闭面板'],['menu','返回主菜单']], 'act');
 }
 function openTrainPanel(){
   devPanelOpen = true;
