@@ -157,6 +157,25 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #doorbtn svg { width:16px; height:16px; }
 #doorbtn:active { border-color:#9c342c; }
 
+/* --- 藏身柜 --- */
+#hidebtn {
+  position:absolute; left:50%; bottom:45%; transform:translateX(-50%);
+  display:none; align-items:center; gap:9px;
+  background:rgba(10,11,14,0.62); border:1px solid rgba(222,217,204,0.26);
+  color:#ded9cc; padding:10px 24px; font-size:13px; letter-spacing:0.4em; text-indent:0.4em;
+  font-family:inherit; pointer-events:auto; z-index:35;
+}
+#hidebtn svg { width:16px; height:16px; }
+#hidebtn:active { border-color:#9c342c; }
+#hideview {
+  position:absolute; inset:0; z-index:40; display:none; pointer-events:none;
+  background:
+    repeating-linear-gradient(90deg, rgba(2,3,4,0.96) 0 30px, rgba(2,3,4,0.10) 30px 46px),
+    linear-gradient(180deg, rgba(2,3,4,0.72) 0%, rgba(2,3,4,0.10) 30%, rgba(2,3,4,0.10) 70%, rgba(2,3,4,0.80) 100%);
+}
+#hideview.on { display:block; animation:hbreathe 4.5s ease-in-out infinite; }
+@keyframes hbreathe { 0%,100%{ opacity:.92 } 50%{ opacity:1 } }
+
 /* --- 叠加层 --- */
 #healflash { position:absolute; inset:0; opacity:0; transition:opacity .3s; pointer-events:none; background:radial-gradient(ellipse at center, rgba(40,180,90,0) 45%, rgba(40,180,90,0.4) 100%); }
   #fade { position:absolute; inset:0; background:#000; opacity:0; pointer-events:none; }
@@ -240,6 +259,15 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 
   <div id="floorlabel">1F · 病房层</div>
   <div id="objectives"></div>
+  <div id="hideview"></div>
+  <button id="hidebtn" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <rect x="4" y="3" width="16" height="18" rx="1.5"/>
+      <line x1="12" y1="3" x2="12" y2="21"/>
+      <circle cx="9.4" cy="12" r="0.9"/><circle cx="14.6" cy="12" r="0.9"/>
+    </svg>
+    <span>躲藏</span>
+  </button>
   <div id="fps"></div>
   <div id="gunbox">
     <div id="weaponname">手枪</div>
@@ -344,6 +372,7 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
     <div class="menu">
       <button class="menu-item" id="startbtn" type="button">开始游戏</button>
       <button class="menu-item" id="howbtn" type="button">操作说明</button>
+      <button class="menu-item" id="achbtn" type="button">成就</button>
       <button class="menu-item" id="diffbtn" type="button">难度 · 普通</button>
       <button class="menu-item" id="gfxbtn" type="button">画质 · 流畅</button>
     </div>
@@ -362,6 +391,7 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
       <div class="ctl">幻视 —— 理智过低时会看见假怪物，开枪只会浪费子弹</div>
       <div class="ctl">荧光棒 —— 点右下按钮投出（或按 G），落地照亮并恢复理智</div>
       <div class="ctl">突发状况 —— 停电 / 血月 / 低语 / 空投补给，随时可能发生</div>
+      <div class="ctl">躲藏 —— 走近柜子按「躲藏」，未被看见时怪物会失去目标</div>
       <div class="ctl">开门 / 锁门 —— 走近房门出现按钮，可反复开关</div>
       <div class="ctl">跑步 —— 按住「跑步」按钮（或 Shift），消耗体力</div>
       <div class="ctl">隐藏 —— 跑步声和手电光都会引来怪物，越大动静越容易被发现</div>
@@ -469,6 +499,7 @@ var elSanityFill = $('sanityfill');
 var elSanityState = $('sanitystate');
 var elObjectives = $('objectives');
 var elStickbtn = $('stickbtn');
+var elHidebtn = $('hidebtn'), elHideView = $('hideview');
 var elRotate = $('rotate');
 var elScreen = $('screen'), elStartBtn = $('startbtn');
 
@@ -2151,7 +2182,8 @@ var player = {
   fireCd:0, reloading:false, reloadT:0, firing:false,
   speed:0,
   stamina:200, staminaMax:200, exhausted:false, boostT:0,
-  sanity:100, sanityMax:100, medUsed:0, sticks:2
+  sanity:100, sanityMax:100, medUsed:0, sticks:2,
+  hiding:false, hideLocker:null, hideT:0
 };
 for(var wi=1; wi<WEAPONS.length; wi++){ player.weapons.push({idx:wi, mag:WEAPONS[wi].magSize}); }
 
@@ -2582,7 +2614,7 @@ function updateSedatives(dt){
       showMsg('注射镇静剂 · 体力全满 · 8 秒提速', 2);
       updateHud();
   objTimer += dt;
-  if(objTimer > 0.35){ objTimer = 0; updateObjectives(); }
+  if(objTimer > 0.35){ objTimer = 0; updateObjectives(); checkAchievements(); }
     }
   }
 }
@@ -2737,6 +2769,7 @@ $('fire').addEventListener('pointercancel', function(){ player.firing=false; });
 $('reload').addEventListener('pointerdown', function(e){ e.preventDefault(); startReload(); });
 function toggleFlash(){
   flashOn = !flashOn;
+  if(flashOn) achState.flashUsed = true;
   flash.visible = flashOn;
   beam.visible = flashOn;
   flash.intensity = flashOn ? (0.9 + flashCharge*1.7) : 0;
@@ -2760,6 +2793,11 @@ function setRunMode(v){
     if(rb) rb.textContent = runMode ? '跑动' : '跑步';
   }
 }
+if(elHidebtn) elHidebtn.addEventListener('pointerdown', function(e){
+  e.preventDefault(); e.stopPropagation();
+  if(player.hiding) exitLocker(false);
+  else { var L2 = nearestLocker(); if(L2) enterLocker(L2); }
+});
 if(elStickbtn) elStickbtn.addEventListener('pointerdown', function(e){
   e.preventDefault(); e.stopPropagation();
   throwGlowStick();
@@ -2911,6 +2949,7 @@ function killMonster(mo){
   }
   stats.kills++;
   stats.score += 10;
+  achState.killed[mo.type] = true;
   spawnBlood(mo.pos.x, mo.pos.y+1, mo.pos.z, 16);
   mo.deathT = 0.5;
   mo.dying = true;
@@ -2950,6 +2989,63 @@ var eventTimer = 42, eventActive = '', eventT = 0, lastEvent = '';
 var eventSpeedMul = 1;
 var glowSticks = [];
 var lightMul = 1;
+/* ---- 成就 ---- */
+var achState = { survived:false, flashUsed:false, madT:0, hidT:0, killed:{} };
+function loadAch(){ try { return JSON.parse(localStorage.getItem('ns_ach') || '{}') || {}; } catch(e){ return {}; } }
+function saveAch(id){ try { var s = loadAch(); s[id] = 1; localStorage.setItem('ns_ach', JSON.stringify(s)); } catch(e){} }
+var ACHS = [
+  { id:'first',  name:'第一夜',   desc:'首次活到天亮',                    check:function(){ return achState.survived; } },
+  { id:'truth',  name:'真相',     desc:'集齐 6 份病历并活到天亮',          check:function(){ return achState.survived && stats.notes >= 6; } },
+  { id:'hachi',  name:'巨人杀手', desc:'击杀八尺大人',                    check:function(){ return !!achState.killed.hachishaku; } },
+  { id:'slender',name:'直视恐惧', desc:'击杀瘦长鬼影',                    check:function(){ return !!achState.killed.slender; } },
+  { id:'blind',  name:'无声胜有声',desc:'击杀盲眼修女',                   check:function(){ return !!achState.killed.blind; } },
+  { id:'dark',   name:'隐形人',   desc:'全程不开手电活到天亮',            check:function(){ return achState.survived && !achState.flashUsed; } },
+  { id:'night3', name:'长夜漫漫', desc:'守到第 3 夜',                     check:function(){ return night >= 3; } },
+  { id:'butcher',name:'屠夫',     desc:'单夜击杀 15 个怪物',              check:function(){ return stats.kills >= 15; } },
+  { id:'nomed',  name:'铁人',     desc:'不使用急救包活到天亮',            check:function(){ return achState.survived && player.medUsed === 0; } },
+  { id:'mad',    name:'疯狂',     desc:'理智归零后仍存活 30 秒',          check:function(){ return achState.madT >= 30; } },
+  { id:'hider',  name:'屏息',     desc:'在柜中躲过 15 秒未被发现',        check:function(){ return achState.hidT >= 15; } },
+  { id:'ghost',  name:'驱魔人',   desc:'击杀女鬼',                        check:function(){ return !!achState.killed.ghost; } }
+];
+function unlockAch(a){
+  if(loadAch()[a.id]) return;
+  saveAch(a.id);
+  stats.score += 20;
+  showMsg('★ 成就解锁：' + a.name, 2.8);
+  try { AudioSys.pickup(); } catch(e){}
+}
+function checkAchievements(){
+  for(var i=0;i<ACHS.length;i++){
+    var a = ACHS[i];
+    if(loadAch()[a.id]) continue;
+    try { if(a.check()) unlockAch(a); } catch(e){}
+  }
+}
+var elStory = $('story'), storyOrig = elStory ? elStory.innerHTML : '';
+function showAchievements(){
+  if(!elStory) return;
+  if(elStory.dataset.mode === 'ach'){
+    elStory.classList.remove('show');
+    elStory.dataset.mode = '';
+    elStory.innerHTML = storyOrig;
+    return;
+  }
+  var saved = loadAch(), got = 0, html = '<p>成 就</p>';
+  for(var i=0;i<ACHS.length;i++){
+    var a = ACHS[i], has = !!saved[a.id];
+    if(has) got++;
+    html += '<div class="ctl" style="color:' + (has ? '#e8dfc0' : '#6f6a5e') + ';letter-spacing:0.06em">' +
+            (has ? '★ ' : '· ') + a.name + ' —— ' + a.desc + '</div>';
+  }
+  html += '<div class="ctl" style="margin-top:10px">已解锁 ' + got + ' / ' + ACHS.length + '</div>';
+  elStory.innerHTML = html;
+  elStory.dataset.mode = 'ach';
+  elStory.classList.add('show');
+}
+if($('achbtn')) $('achbtn').addEventListener('pointerdown', function(e){ e.preventDefault(); showAchievements(); });
+if($('howbtn')) $('howbtn').addEventListener('pointerdown', function(e){
+  if(elStory && elStory.dataset.mode === 'ach'){ elStory.dataset.mode = ''; elStory.innerHTML = storyOrig; }
+});
 var difficulty = 1;
 var cameraShake = 0;
 var crosshairHitTimer = 0;
@@ -2996,11 +3092,15 @@ function resetGame(){
   sedatives.length = 0;
   player.boostT = 0;
   stats.kills = 0; stats.pickups = 0; stats.notes = 0; stats.score = 0;
+  achState.killed = {}; achState.madT = 0; achState.hidT = 0;
   player.sanity = player.sanityMax; player.medUsed = 0;
   sanityBreakT = 0; hbT = 0; objTimer = 0;
   for(var gs=glowSticks.length-1; gs>=0; gs--){ if(glowSticks[gs].light) scene.remove(glowSticks[gs].light); scene.remove(glowSticks[gs].m); }
   glowSticks.length = 0;
   player.sticks = 3; updateStickHud();
+  player.hiding = false; player.hideLocker = null;
+  if(elHideView) elHideView.classList.remove('on');
+  for(var lk=0; lk<lockers.length; lk++){ lockers[lk].discovered = false; lockers[lk].discT = 0; }
   for(var skp=stickPacks.length-1; skp>=0; skp--){ scene.remove(stickPacks[skp].g); }
   stickPacks.length = 0;
   lightMul = 1; eventSpeedMul = 1; eventActive = ''; eventTimer = rand(40, 60); lastEvent = ''; noisePulse = 0;
@@ -3036,6 +3136,15 @@ function resetGame(){
   spawnStickPack(-12.5, -8.5, 0);  // 1F 病房D
   spawnStickPack(12.5, -13.5, 1);  // 2F 病房I
   spawnStickPack(6.2, 5.1, 2);     // 3F 天台东侧
+  /* 藏身柜 */
+  spawnLocker(-9, 1.55, 0, -Math.PI/2);
+  spawnLocker(9.4, 1.55, 0, -Math.PI/2);
+  spawnLocker(1.55, -9.5, 0, 0);
+  spawnLocker(-9, 1.55, 1, -Math.PI/2);
+  spawnLocker(9.4, 1.55, 1, -Math.PI/2);
+  spawnLocker(1.55, -21.5, 1, 0);
+  spawnLocker(-11.5, -6.0, 2, 0);
+  spawnLocker(10.5, -8.0, 2, 0);
   // 急救包分布
   spawnHealthPack(-5.1, -19.5, 0);  // 1F 护士站
   spawnHealthPack(-5.1, -13.5, 0);  // 1F 药房
@@ -3081,6 +3190,31 @@ function updateInner(dt){
   if(devPanelOpen) return;                       /* 开发者面板打开时暂停 */
 
   elapsed += dt * (dev.on && dev.fast ? 5 : 1); /* 开发者时间加速 */
+
+  /* --- 躲藏中：不能移动/开枪，理智与体力缓慢恢复 --- */
+  if(player.hiding){
+    var HL = player.hideLocker;
+    if(!HL){ player.hiding = false; }
+    else {
+      player.hideT += dt;
+      if(!HL.discovered) achState.hidT += dt;
+      player.sanity = Math.min(player.sanityMax, player.sanity + dt*4.5);
+      player.stamina = Math.min(player.staminaMax, player.stamina + dt*22);
+      player.boostT = Math.max(0, player.boostT);
+      camera.position.set(HL.x + Math.sin(HL.rotY)*0.06, floorY(currentFloor)+1.42, HL.z + Math.cos(HL.rotY)*0.06);
+      camera.rotation.set(clamp(player.pitch, -0.55, 0.5), player.yaw, 0, 'YXZ');
+      camera.getWorldDirection(cameraDir);
+      /* 被发现的柜子：3.5 秒后被揪出来 */
+      if(HL.discovered){
+        HL.discT += dt;
+        if(HL.discT > 0.5 && HL.discT < 3.4 && Math.random() < dt*3) { try { AudioSys.bang(); } catch(e){} }
+        if(HL.discT >= 3.5){ exitLocker(true); }
+      }
+      updateDoors(dt);
+      updateHud(); updateObjectives();
+      return;
+    }
+  }
 
   /* --- 移动 --- */
   var mv = {f:0,s:0};
@@ -3147,6 +3281,7 @@ function updateInner(dt){
   }
   if(player.sanity <= 0){
     sanityBreakT += dt;
+    achState.madT += dt;
     if(sanityBreakT >= 1){ sanityBreakT = 0; damagePlayer(3, null); showMsg('精神崩溃 · 理智耗尽', 1.2); }
   } else sanityBreakT = 0;
 
@@ -3194,6 +3329,12 @@ function updateInner(dt){
     if(lb) lb.textContent = lbl;
   } else {
     elDoorbtn.style.display = 'none';
+  }
+  var nLocker = nearestLocker();
+  if(elHidebtn){
+    if(player.hiding){ elHidebtn.style.display = 'flex'; }
+    else if(nLocker){ elHidebtn.style.display = 'flex'; if(elHidebtn.querySelector('span')) elHidebtn.querySelector('span').textContent = '躲藏'; }
+    else elHidebtn.style.display = 'none';
   }
   if(keys['KeyE']){
     keys['KeyE'] = false;
@@ -3416,6 +3557,26 @@ function updateMonsters(dt){
     mo.dist = dist;
     var sameFloor = Math.abs(player.pos.y - mo.pos.y) < 1.4;
     var sp = t.speed * (1 + noiseLevel*0.16) * (1 + (night-1)*0.06) * eventSpeedMul;
+    /* 玩家躲进柜子且没被发现 → 怪物失去目标，四处游荡 */
+    if(player.hiding && player.hideLocker && !player.hideLocker.discovered && !mo.fake){
+      sp *= 0.3;
+      mo.wanderT = (mo.wanderT||0) - dt;
+      if(mo.wanderT <= 0 || mo.wanderX === undefined){
+        mo.wanderT = rand(2.2, 4.5);
+        mo.wanderX = clamp(mo.pos.x + rand(-7,7), -19.5, 16);
+        mo.wanderZ = clamp(mo.pos.z + rand(-7,7), -26.5, 8.5);
+      }
+      var wx = mo.wanderX - mo.pos.x, wz = mo.wanderZ - mo.pos.z;
+      var wl = Math.sqrt(wx*wx + wz*wz);
+      if(wl > 0.4){
+        mo.pos.x += (wx/wl)*sp*dt;
+        mo.pos.z += (wz/wl)*sp*dt;
+      }
+      mo.mesh.position.x = mo.pos.x; mo.mesh.position.z = mo.pos.z;
+      mo.dist = dist;
+      animateLimbs(mo, dt);
+      continue;
+    }
     if(mo.fake){
       /* 幻视：闪烁的假怪物，靠近就消散，不会伤害你 */
       mo.life -= dt;
@@ -3492,7 +3653,7 @@ function updateMonsters(dt){
 
     animateLimbs(mo, dt);
 
-    if(!mo.fake && dist < t.atkR && sameFloor && mo.atkTimer<=0){
+    if(!mo.fake && !player.hiding && dist < t.atkR && sameFloor && mo.atkTimer<=0){
       mo.atkTimer = t.atkCd;
       damagePlayer(t.dmg, mo);
     }
@@ -3610,6 +3771,8 @@ function lose(){
 }
 function win(){
   gameOver = true;
+  achState.survived = true;
+  checkAchievements();
   night++;                       /* 通关后进入下一夜（无尽守夜） */
   var truth = stats.notes >= 6;
   var sub;
@@ -3826,6 +3989,79 @@ function saveBest(score, n, rank){
     }
   } catch(e){}
   return false;
+}
+
+/* ---------------- 藏身柜 ---------------- */
+var lockers = [];
+function spawnLocker(x, z, f, rotY){
+  var grp = new THREE.Group();
+  var bodyMat = new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(metalCanvas), roughness:0.6, metalness:0.5});
+  var box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.9, 0.6), bodyMat);
+  box.position.y = 0.95; grp.add(box);
+  var doorA = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.66, 0.04), new THREE.MeshStandardMaterial({color:0x2b3138, roughness:0.55, metalness:0.5}));
+  doorA.position.set(-0.22, 0.98, 0.31); grp.add(doorA);
+  var doorB = doorA.clone(); doorB.position.x = 0.22; grp.add(doorB);
+  var vent = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.04, 0.02), new THREE.MeshStandardMaterial({color:0x14181d, roughness:0.9}));
+  for(var vi=0; vi<4; vi++){
+    var vv = vent.clone(); vv.position.set(0, 1.55 - vi*0.06, 0.335); grp.add(vv);
+  }
+  var handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.03), new THREE.MeshStandardMaterial({color:0x8a8578, roughness:0.4, metalness:0.8}));
+  handle.position.set(-0.03, 0.98, 0.345); grp.add(handle);
+  grp.position.set(x, floorY(f), z);
+  grp.rotation.y = rotY || 0;
+  scene.add(grp);
+  /* 碰撞体（旋转后取包围盒近似） */
+  var hw = (Math.abs(Math.cos(rotY||0)) > 0.5) ? 0.48 : 0.33;
+  var hd = (Math.abs(Math.cos(rotY||0)) > 0.5) ? 0.33 : 0.48;
+  wallsByFloor[f].push({minX:x-hw, maxX:x+hw, minZ:z-hd, maxZ:z+hd});
+  lockers.push({g:grp, x:x, z:z, floor:f, rotY:rotY||0, discovered:false, discT:0});
+}
+function nearestLocker(){
+  var best = null, bestD = 2.2;
+  for(var i=0;i<lockers.length;i++){
+    var L = lockers[i];
+    if(L.floor !== currentFloor) continue;
+    var dx = player.pos.x - L.x, dz = player.pos.z - L.z;
+    var d = Math.sqrt(dx*dx + dz*dz);
+    if(d < bestD){ bestD = d; best = L; }
+  }
+  return best;
+}
+function enterLocker(L){
+  if(!L) return;
+  player.hiding = true; player.hideLocker = L; player.hideT = 0;
+  L.discovered = false; L.discT = 0;
+  /* 躲进去前被看见 → 会被揪出来 */
+  for(var i=0;i<monsters.length;i++){
+    var mo = monsters[i];
+    if(!mo.alive || mo.fake || mo.floor !== currentFloor) continue;
+    var dx = mo.pos.x - L.x, dz = mo.pos.z - L.z;
+    if(Math.sqrt(dx*dx + dz*dz) < 9.5){ L.discovered = true; break; }
+  }
+  elHidebtn.querySelector('span').textContent = '出来';
+  if(elHideView) elHideView.classList.add('on');
+  showMsg(L.discovered ? '它们看见你躲进来了！' : '你屏住呼吸，藏进柜子', 1.8);
+  try { AudioSys.door(); } catch(e){}
+}
+function exitLocker(forced){
+  var L = player.hideLocker;
+  player.hiding = false; player.hideLocker = null;
+  if(elHideView) elHideView.classList.remove('on');
+  if(elHidebtn) elHidebtn.querySelector('span').textContent = '躲藏';
+  if(L){
+    /* 站到柜子前方 */
+    var fx = Math.sin(L.rotY), fz = Math.cos(L.rotY);
+    player.pos.x = L.x + fx*0.95;
+    player.pos.z = L.z + fz*0.95;
+  }
+  if(forced){
+    damagePlayer(16, null);
+    showMsg('柜门被猛地拉开！', 2);
+    try { AudioSys.bang(); AudioSys.shriek(); } catch(e){}
+  } else {
+    showMsg('你从柜子里出来', 1.2);
+    try { AudioSys.door(); } catch(e){}
+  }
 }
 
 /* ---------------- 开发者模式 ---------------- */
