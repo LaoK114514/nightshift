@@ -23,6 +23,15 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #hpbar { width:150px; height:3px; background:rgba(222,217,204,0.12); }
 #healthfill { height:100%; width:100%; background:#9c342c; transition:width .25s; }
 #hptext { font-size:10px; letter-spacing:0.16em; color:#a39d8e; margin-top:6px; font-variant-numeric:tabular-nums; }
+#stamlabel { font-size:10px; letter-spacing:0.42em; color:#8f8a7c; margin:13px 0 7px; }
+#stambar { width:150px; height:3px; background:rgba(222,217,204,0.12); }
+#stamfill { height:100%; width:100%; background:#6f9c5a; transition:width .12s linear; }
+#stamfill.low { background:#c9a13a; }
+#stamfill.empty { background:#9c342c; }
+#threat { font-size:10px; letter-spacing:0.16em; color:#6f9c5a; margin-top:8px; }
+#threat.warn { color:#c9a13a; }
+#threat.bad { color:#c25a4a; }
+.rbtn.active { border-color:#c9a13a; background:rgba(201,161,58,0.20); }
 
 /* --- 顶部中间：时间 --- */
 #topmid { position:absolute; top:20px; left:50%; transform:translateX(-50%); text-align:center; }
@@ -32,7 +41,7 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #dawnlabel { font-size:10px; letter-spacing:0.24em; color:#8f8a7c; margin-top:7px; }
 
 /* --- 右上：楼层 / 武器 --- */
-#fps { position:absolute; top:96px; left:22px; font-size:12px; letter-spacing:0.08em; color:#c9b98a; font-variant-numeric:tabular-nums; text-shadow:0 0 6px #000; }
+#fps { position:absolute; top:150px; left:22px; font-size:12px; letter-spacing:0.08em; color:#c9b98a; font-variant-numeric:tabular-nums; text-shadow:0 0 6px #000; }
   #floorlabel { position:absolute; top:22px; right:22px; font-size:11px; letter-spacing:0.32em; color:#a39d8e; }
 #gunbox { position:absolute; top:54px; right:22px; text-align:right; }
 #weaponname { font-size:13px; letter-spacing:0.24em; color:#c9c2b2; }
@@ -164,6 +173,9 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
     <div id="hplabel">生命</div>
     <div id="hpbar"><div id="healthfill"></div></div>
     <div id="hptext">100 / 100</div>
+    <div id="stamlabel">体力</div>
+    <div id="stambar"><div id="stamfill"></div></div>
+    <div id="threat">安静</div>
   </div>
 
   <div id="topmid">
@@ -208,6 +220,16 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
           <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
         </svg>
         <span>换弹</span>
+      </button>
+      <button class="rbtn" id="runbtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <circle cx="14.2" cy="4.2" r="1.9"/>
+          <path d="M13.2 7.8l2.6 1.7 1.6 3.6"/>
+          <path d="M15.8 9.5l-4.1 2.7.6 5"/>
+          <path d="M12.3 12.4l-4.6 1.6"/>
+          <path d="M11.7 17.2L7.9 20.6"/>
+        </svg>
+        <span>跑步</span>
       </button>
       <button class="rbtn" id="flashbtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -267,7 +289,9 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
       <div class="ctl">换弹 —— 弹药无限，仍需手动换弹</div>
       <div class="ctl">换枪 —— 霰弹枪在 1F 安保室，冲锋枪在 2F 药库</div>
       <div class="ctl">开门 / 锁门 —— 走近房门出现按钮，可反复开关</div>
-      <div class="ctl">手电 —— 右下「手电」按钮，关灯省电但更危险</div>
+      <div class="ctl">跑步 —— 按住「跑步」按钮（或 Shift），消耗体力</div>
+      <div class="ctl">隐藏 —— 跑步声和手电光都会引来怪物，越大动静越容易被发现</div>
+      <div class="ctl">手电 —— 右下「手电」按钮，关灯省电也更隐蔽</div>
       <div class="ctl">楼梯 —— 走近楼梯一路走上去（走完一整段才换层）</div>
     </div>
     <div class="menu-foot">NIGHT SHIFT AT THE ASYLUM · V1.1</div>
@@ -337,6 +361,9 @@ var elHeal = $('healflash');
 var elLoading = $('loading');
 var elFps = $('fps');
 var elFlashbtn = $('flashbtn');
+var elRunbtn = $('runbtn');
+var elStamFill = $('stamfill');
+var elThreat = $('threat');
 var elRotate = $('rotate');
 var elScreen = $('screen'), elStartBtn = $('startbtn');
 
@@ -1995,7 +2022,8 @@ var player = {
   hp:100, maxHp:100,
   weapons:[{idx:0, mag:12}], cur:0, unlocked:[0],
   fireCd:0, reloading:false, reloadT:0, firing:false,
-  speed:0
+  speed:0,
+  stamina:100, staminaMax:100, exhausted:false
 };
 for(var wi=1; wi<WEAPONS.length; wi++){ player.weapons.push({idx:wi, mag:WEAPONS[wi].magSize}); }
 
@@ -2010,6 +2038,8 @@ var gunBaseRot = gunGroup.rotation.clone();
 var recoil = 0;
 var rampTrack = { id:-1, t0:0 }, rampCooldown = 0;
 var flashOn = true;
+var noiseLevel = 0;      /* 动静/暴露度：跑步与开灯会拉高，怪物更容易发现你 */
+var runHeld = false;
 var magDrops = [];
 
 function buildGunModel(idx){
@@ -2276,7 +2306,7 @@ function spawnMonster(type){
   if(!pts || pts.length === 0) return;
   var cand = [];
   for(var i=0;i<pts.length;i++){
-    if(dist2(player.pos.x,player.pos.z, pts[i][0], pts[i][1]) > 140) cand.push(pts[i]);
+    if(dist2(player.pos.x,player.pos.z, pts[i][0], pts[i][1]) > (140 - noiseLevel*55)) cand.push(pts[i]);
   }
   if(cand.length===0) cand = pts;
   var sp = cand[randi(0,cand.length-1)];
@@ -2488,6 +2518,15 @@ function toggleFlash(){
   showMsg(flashOn ? '手电已打开' : '手电已关闭（黑暗中更危险）', 1.4);
 }
 if(elFlashbtn) elFlashbtn.addEventListener('pointerdown', function(e){ e.preventDefault(); toggleFlash(); });
+/* 跑步按钮：按住就跑 */
+if(elRunbtn){
+  var runOn = function(e){ e.preventDefault(); runHeld = true; elRunbtn.classList.add('active'); };
+  var runOff = function(e){ if(e) e.preventDefault(); runHeld = false; elRunbtn.classList.remove('active'); };
+  elRunbtn.addEventListener('pointerdown', runOn);
+  elRunbtn.addEventListener('pointerup', runOff);
+  elRunbtn.addEventListener('pointercancel', runOff);
+  elRunbtn.addEventListener('pointerleave', runOff);
+}
 $('weapon').addEventListener('pointerdown', function(e){ e.preventDefault(); cycleWeapon(); });
 
 var keys = {};
@@ -2681,6 +2720,9 @@ function resetGame(){
   stats.kills = 0; stats.pickups = 0; stats.notes = 0;
   flashCharge = 1;
   flashOn = true;
+  player.stamina = player.staminaMax; player.exhausted = false;
+  noiseLevel = 0; runHeld = false;
+  if(elRunbtn) elRunbtn.classList.remove('active');
   flash.visible = true; beam.visible = true;
   if(elFlashbtn){ elFlashbtn.classList.remove('off'); var fb = elFlashbtn.querySelector('span'); if(fb) fb.textContent = '手电'; }
   for(var md=magDrops.length-1;md>=0;md--){ scene.remove(magDrops[md].m); }
@@ -2750,10 +2792,9 @@ function updateInner(dt){
   if(keys['KeyS']||keys['ArrowDown']) mv.f-=1;
   if(keys['KeyA']||keys['ArrowLeft']) mv.s-=1;
   if(keys['KeyD']||keys['ArrowRight']) mv.s+=1;
-  var sprint = false;
   var jlen = Math.sqrt(joyVec.x*joyVec.x+joyVec.y*joyVec.y);
-  if(jlen>0.85) sprint = true;
-  if(keys['ShiftLeft']||keys['ShiftRight']) sprint = true;
+  var wantSprint = (jlen>0.92) || runHeld || keys['ShiftLeft'] || keys['ShiftRight'];
+  var sprint = wantSprint && !player.exhausted && player.stamina > 0;
 
   var speed = sprint?SPRINT_SPEED:WALK_SPEED;
   var fl = Math.sqrt(mv.f*mv.f+mv.s*mv.s);
@@ -2765,6 +2806,18 @@ function updateInner(dt){
   var vz = (fz*mv.f + rz*mv.s)*speed;
   var moving = (Math.abs(mv.f)+Math.abs(mv.s))>0.01;
   player.speed = moving?speed:0;
+
+  /* --- 体力 & 动静（暴露度） --- */
+  var sprinting = sprint && moving;
+  if(sprinting){
+    player.stamina = Math.max(0, player.stamina - dt*24);   /* 满体力约可跑 4.2 秒 */
+  } else {
+    player.stamina = Math.min(player.staminaMax, player.stamina + dt*(player.exhausted?9:14));
+  }
+  if(player.stamina <= 0) player.exhausted = true;
+  if(player.exhausted && player.stamina > 30) player.exhausted = false;
+  /* 跑步 = 脚步声很大；开着手电 = 灯光暴露 */
+  noiseLevel = (sprinting ? 1.0 : 0) + (flashOn ? 0.7 : 0);
   player.pos.x += vx*dt; player.pos.z += vz*dt;
   resolveCircle(player.pos, PLAYER_RADIUS, wallsByFloor[currentFloor]);
   resolveDoors(player.pos, PLAYER_RADIUS, currentFloor);
@@ -2924,6 +2977,7 @@ function updateInner(dt){
   } else {
     regenT = 0;
   }
+  updateHud();
 
   /* --- 怪物 --- */
   updateSpawning(dt);
@@ -2968,7 +3022,7 @@ function updateSpawning(dt){
     for(var i=0;i<monsters.length;i++){ if(monsters[i].alive && monsters[i].type===nm && monsters[i].floor===currentFloor) count++; }
     if(count < want[nm] && spawnTimers[nm] <= 0){
       spawnMonster(nm);
-      spawnTimers[nm] = 1.0;
+      spawnTimers[nm] = 1.0 / (1 + noiseLevel*0.6);
     }
   }
 }
@@ -2994,14 +3048,14 @@ function updateMonsters(dt){
     var dist = Math.sqrt(dx*dx+dz*dz);
     mo.dist = dist;
     var sameFloor = Math.abs(player.pos.y - mo.pos.y) < 1.4;
-    var sp = t.speed;
+    var sp = t.speed * (1 + noiseLevel*0.16);   /* 动静越大，它们越亢奋 */
 
     var frozen = false;
     if(t.slender){
       var toSlender = new THREE.Vector3(mo.pos.x-camera.position.x, (mo.pos.y+t.halfH)-camera.position.y, mo.pos.z-camera.position.z).normalize();
       var dot = toSlender.dot(cameraDir);
       if(dot > 0.985){ frozen = true; }
-      if(frozen){ sp = 0; } else { sp = t.speed*1.35; }
+      if(frozen){ sp = 0; } else { sp = t.speed*1.35*(1 + noiseLevel*0.16); }
       if(dist < 12){
         var inView = dot > 0.985;
         staticLevel = Math.max(staticLevel, (inView?0.55:0.25) * clamp(1 - dist/12, 0.15, 1));
@@ -3136,6 +3190,18 @@ function updateHud(){
   elDawnFill.style.width = (elapsed/NIGHT_DURATION*100)+'%';
   elDawnLabel.textContent = '距天亮 '+fmtLeft(elapsed);
   elStatic.style.opacity = staticLevel;
+  /* 体力条 */
+  if(elStamFill){
+    var sr = clamp(player.stamina/player.staminaMax, 0, 1);
+    elStamFill.style.width = (sr*100)+'%';
+    elStamFill.className = player.exhausted ? 'empty' : (sr < 0.4 ? 'low' : '');
+  }
+  /* 暴露提示：安静 / 有动静 / 很显眼 */
+  if(elThreat){
+    var lv = noiseLevel >= 1.2 ? 2 : (noiseLevel >= 0.6 ? 1 : 0);
+    elThreat.textContent = lv===2 ? '很显眼 · 它们来了' : (lv===1 ? '有动静' : '安静');
+    elThreat.className = lv===2 ? 'bad' : (lv===1 ? 'warn' : '');
+  }
 }
 
 /* ---------------- 结束 ---------------- */
