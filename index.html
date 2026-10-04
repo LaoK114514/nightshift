@@ -2816,8 +2816,8 @@ function updateInner(dt){
   if(keys['KeyS']||keys['ArrowDown']) mv.f-=1;
   if(keys['KeyA']||keys['ArrowLeft']) mv.s-=1;
   if(keys['KeyD']||keys['ArrowRight']) mv.s+=1;
-  var jlen = Math.sqrt(joyVec.x*joyVec.x+joyVec.y*joyVec.y);
-  var wantSprint = runMode || (jlen>0.92) || runHeld || keys['ShiftLeft'] || keys['ShiftRight'];
+  /* 只有开启跑步模式（按钮/Shift）才冲刺，推摇杆走路不会掉体力 */
+  var wantSprint = runMode || runHeld || keys['ShiftLeft'] || keys['ShiftRight'];
   var sprint = wantSprint && !player.exhausted && player.stamina > 0;
 
   var speed = sprint?SPRINT_SPEED:WALK_SPEED;
@@ -2838,7 +2838,10 @@ function updateInner(dt){
   } else {
     player.stamina = Math.min(player.staminaMax, player.stamina + dt*(player.exhausted?9:14));
   }
-  if(player.stamina <= 0) player.exhausted = true;
+  if(player.stamina <= 0 && !player.exhausted){
+    player.exhausted = true;
+    showMsg('体力耗尽 · 走一走恢复体力', 2);
+  }
   if(player.exhausted && player.stamina > 30) player.exhausted = false;
   /* 跑步 = 脚步声很大；开着手电 = 灯光暴露 */
   noiseLevel = (sprinting ? 1.0 : 0) + (flashOn ? 0.7 : 0);
