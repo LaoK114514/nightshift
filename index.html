@@ -31,6 +31,17 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #threat { font-size:10px; letter-spacing:0.16em; color:#6f9c5a; margin-top:6px; }
 #threat.warn { color:#c9a13a; }
 #threat.bad { color:#c25a4a; }
+#sanitylabel { font-size:10px; letter-spacing:0.42em; color:#8f8a7c; margin:11px 0 6px; }
+#sanitybar { width:150px; height:3px; background:rgba(222,217,204,0.12); }
+#sanityfill { height:100%; width:100%; background:#6f8fb8; transition:width .18s linear; }
+#sanityfill.low { background:#8a6fbf; }
+#sanityfill.empty { background:#9c342c; }
+#sanitystate { font-size:10px; letter-spacing:0.16em; color:#6f8fb8; margin-top:6px; }
+#sanitystate.warn { color:#8a6fbf; }
+#sanitystate.bad { color:#c25a4a; }
+#objectives { position:absolute; top:118px; right:22px; text-align:right; }
+#objectives .obj { font-size:10px; letter-spacing:0.1em; color:#8f8a7c; margin-top:4px; }
+#objectives .obj.done { color:#6f9c5a; }
 .rbtn.active { border-color:#c9a13a; background:rgba(201,161,58,0.20); }
 
 /* --- 开发者模式 --- */
@@ -216,6 +227,9 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
     <div id="stamlabel">体力</div>
     <div id="stambar"><div id="stamfill"></div></div>
     <div id="threat">安静</div>
+    <div id="sanitylabel">理智</div>
+    <div id="sanitybar"><div id="sanityfill"></div></div>
+    <div id="sanitystate">清醒</div>
   </div>
 
   <div id="topmid">
@@ -225,6 +239,7 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
   </div>
 
   <div id="floorlabel">1F · 病房层</div>
+  <div id="objectives"></div>
   <div id="fps"></div>
   <div id="gunbox">
     <div id="weaponname">手枪</div>
@@ -435,6 +450,9 @@ var elFlashbtn = $('flashbtn');
 var elRunbtn = $('runbtn');
 var elStamFill = $('stamfill');
 var elThreat = $('threat');
+var elSanityFill = $('sanityfill');
+var elSanityState = $('sanitystate');
+var elObjectives = $('objectives');
 var elRotate = $('rotate');
 var elScreen = $('screen'), elStartBtn = $('startbtn');
 
@@ -537,10 +555,10 @@ var PostFX = (function(){
     uniforms: {
       tScene:{value:sceneRT.texture}, tGlow:{value:null}, time:{value:0},
       res:{value:new THREE.Vector2(w,h)}, glowAmount:{value:0.85}, vignette:{value:0.85},
-      grain:{value:0.028}, saturation:{value:1.08}, exposure:{value:1.05}
+      grain:{value:0.028}, saturation:{value:1.08}, exposure:{value:1.05}, caAmount:{value:0.0035}
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }',
-    fragmentShader: 'uniform sampler2D tScene; uniform sampler2D tGlow; uniform float time; uniform vec2 res; uniform float glowAmount; uniform float vignette; uniform float grain; uniform float saturation; uniform float exposure; varying vec2 vUv; float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); } void main(){ vec2 uv=vUv; vec2 cc=uv-0.5; float ca=dot(cc,cc)*0.0035; float r=texture2D(tScene, uv+cc*ca).r; vec2 gb=texture2D(tScene, uv).gb; float bb=texture2D(tScene, uv-cc*ca).b; vec3 col=vec3(r,gb.x,bb); col += texture2D(tGlow, uv).rgb*glowAmount; col *= exposure; col = clamp(col,0.0,1.0); col = col*(2.51*col+0.03)/(col*(2.43*col+0.59)+0.14); float lum=dot(col,vec3(0.299,0.587,0.114)); col = mix(vec3(lum), col, saturation); col.r*=1.04; col.g*=1.0; col.b*=0.98; col = clamp(col,0.0,1.0); float vd=length(cc)*1.35; col *= 1.0 - vignette*smoothstep(0.42,1.15,vd); col += (hash(uv*res+time)-0.5)*grain; col = pow(clamp(col,0.0,1.0), vec3(0.4545)); gl_FragColor = vec4(col,1.0); }'
+    fragmentShader: 'uniform sampler2D tScene; uniform sampler2D tGlow; uniform float time; uniform vec2 res; uniform float glowAmount; uniform float vignette; uniform float grain; uniform float saturation; uniform float exposure; uniform float caAmount; varying vec2 vUv; float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); } void main(){ vec2 uv=vUv; vec2 cc=uv-0.5; float ca=dot(cc,cc)*caAmount; float r=texture2D(tScene, uv+cc*ca).r; vec2 gb=texture2D(tScene, uv).gb; float bb=texture2D(tScene, uv-cc*ca).b; vec3 col=vec3(r,gb.x,bb); col += texture2D(tGlow, uv).rgb*glowAmount; col *= exposure; col = clamp(col,0.0,1.0); col = col*(2.51*col+0.03)/(col*(2.43*col+0.59)+0.14); float lum=dot(col,vec3(0.299,0.587,0.114)); col = mix(vec3(lum), col, saturation); col.r*=1.04; col.g*=1.0; col.b*=0.98; col = clamp(col,0.0,1.0); float vd=length(cc)*1.35; col *= 1.0 - vignette*smoothstep(0.42,1.15,vd); col += (hash(uv*res+time)-0.5)*grain; col = pow(clamp(col,0.0,1.0), vec3(0.4545)); gl_FragColor = vec4(col,1.0); }'
   });
   var quad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), finalMat);
   fxScene.add(quad);
@@ -585,7 +603,15 @@ var PostFX = (function(){
     renderer.setRenderTarget(null);
     renderer.render(fxScene, fxCam);
   }
-  return { render:render, resize:resize, enabled:function(){ return enabled; }, setEnabled:function(v){ enabled = v; }, setGlow:function(v){ glowOn = v; }, glow:function(){ return glowOn; } };
+  /* 理智驱动的画面扭曲：v=1 清醒 / v=0 崩溃 */
+  function setMood(v){
+    var k = 1 - (v < 0 ? 0 : (v > 1 ? 1 : v));
+    finalMat.uniforms.grain.value = 0.028 + k*0.085;
+    finalMat.uniforms.caAmount.value = 0.0035 + k*0.016;
+    finalMat.uniforms.vignette.value = 0.85 + k*0.30;
+    finalMat.uniforms.saturation.value = 1.08 - k*0.5;
+  }
+  return { render:render, resize:resize, enabled:function(){ return enabled; }, setEnabled:function(v){ enabled = v; }, setGlow:function(v){ glowOn = v; }, glow:function(){ return glowOn; }, setMood:setMood };
 })();
 
 var camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.05, 90);
@@ -2108,7 +2134,8 @@ var player = {
   weapons:[{idx:0, mag:12}], cur:0, unlocked:[0],
   fireCd:0, reloading:false, reloadT:0, firing:false,
   speed:0,
-  stamina:200, staminaMax:200, exhausted:false, boostT:0
+  stamina:200, staminaMax:200, exhausted:false, boostT:0,
+  sanity:100, sanityMax:100, medUsed:0
 };
 for(var wi=1; wi<WEAPONS.length; wi++){ player.weapons.push({idx:wi, mag:WEAPONS[wi].magSize}); }
 
@@ -2508,12 +2535,15 @@ function updateSedatives(dt){
       player.stamina = player.staminaMax;
       player.exhausted = false;
       player.boostT = 8;
+      player.sanity = player.sanityMax;      /* 镇静剂同时稳定精神 */
       scene.remove(p.g);
       sedatives.splice(i,1);
       stats.pickups++;
       AudioSys.heal();
       showMsg('注射镇静剂 · 体力全满 · 8 秒提速', 2);
       updateHud();
+  objTimer += dt;
+  if(objTimer > 0.35){ objTimer = 0; updateObjectives(); }
     }
   }
 }
@@ -2589,6 +2619,7 @@ function updateHealthPacks(dt){
     if(p.floor===currentFloor && dist2(player.pos.x, player.pos.z, p.x, p.z) < 2.2){
       if(player.hp >= player.maxHp) continue;
       player.hp = Math.min(player.maxHp, player.hp + 25);
+      player.medUsed++;
       scene.remove(p.g);
       healthPacks.splice(i,1);
       healFlash = 1;
@@ -2829,6 +2860,7 @@ function raySphere(o,d,c,r){
 function killMonster(mo){
   mo.alive=false;
   stats.kills++;
+  stats.score += 10;
   spawnBlood(mo.pos.x, mo.pos.y+1, mo.pos.z, 16);
   mo.deathT = 0.5;
   mo.dying = true;
@@ -2859,7 +2891,10 @@ function applyQuality(){
 var fpsAvg = 60, fpsFrames = 0, fpsTime = 0, lowFpsFor = 0;
 var healFlash = 0;
 var regenT = 0;
-var stats = {kills:0, pickups:0, notes:0};
+var stats = {kills:0, pickups:0, notes:0, score:0};
+var night = 1;
+var objectives = [];
+var objTimer = 0, sanityBreakT = 0, hbT = 0;
 var difficulty = 1;
 var cameraShake = 0;
 var crosshairHitTimer = 0;
@@ -2876,13 +2911,16 @@ var weaponSway = 0;
 var bobPhase = 0;
 var heartbeatCd = 0;
 
+function floorLabelText(){
+  return FLOOR_NAMES[currentFloor] + (night > 1 ? (' · 第 ' + night + ' 夜') : '');
+}
 function applyFloorVisuals(){
   scene.fog.density = (currentFloor===FLOORS-1) ? 0.035 : 0.11;
   scene.fog.color.set(currentFloor===FLOORS-1 ? 0x0a1424 : 0x04060c);
   scene.background = (currentFloor===FLOORS-1) ? skyTex : new THREE.Color(0x04050a);
   moonLight.intensity = (currentFloor===FLOORS-1) ? 0.85 : 0.3;
   hemi.intensity = (currentFloor===FLOORS-1) ? 0.7 : 0.5;
-  elFloorLabel.textContent = FLOOR_NAMES[currentFloor];
+  elFloorLabel.textContent = floorLabelText();
 }
 
 function resetGame(){
@@ -2902,7 +2940,11 @@ function resetGame(){
   for(var sd=sedatives.length-1;sd>=0;sd--){ scene.remove(sedatives[sd].g); }
   sedatives.length = 0;
   player.boostT = 0;
-  stats.kills = 0; stats.pickups = 0; stats.notes = 0;
+  stats.kills = 0; stats.pickups = 0; stats.notes = 0; stats.score = 0;
+  player.sanity = player.sanityMax; player.medUsed = 0;
+  sanityBreakT = 0; hbT = 0; objTimer = 0;
+  rollObjectives();
+  if(PostFX && PostFX.setMood) PostFX.setMood(1);
   flashCharge = 1;
   flashOn = true;
   player.stamina = player.staminaMax; player.exhausted = false;
@@ -3015,6 +3057,34 @@ function updateInner(dt){
   if(player.boostT > 0) player.boostT -= dt;
   /* 跑步 = 脚步声很大；开着手电 = 灯光暴露 */
   noiseLevel = (sprinting ? 1.0 : 0) + (flashOn ? 0.7 : 0);
+
+  /* --- 理智值：黑暗与恐惧侵蚀，安全时恢复 --- */
+  var nearestD = 999;
+  for(var mi=0; mi<monsters.length; mi++){
+    var mm = monsters[mi];
+    if(!mm.alive || mm.floor !== currentFloor) continue;
+    var mdx = mm.pos.x - player.pos.x, mdz = mm.pos.z - player.pos.z;
+    var mdd = Math.sqrt(mdx*mdx + mdz*mdz);
+    if(mdd < nearestD) nearestD = mdd;
+  }
+  var sDelta = 0;
+  if(!flashOn) sDelta -= 2.4;                                  /* 黑暗侵蚀 */
+  if(nearestD < 12) sDelta -= (12 - nearestD) * 0.34;           /* 恐惧 */
+  if(flashOn && nearestD > 14) sDelta += 1.7;                   /* 安全恢复 */
+  if(player.boostT > 0) sDelta += 1.2;                          /* 镇静剂安定 */
+  player.sanity = clamp(player.sanity + sDelta*dt, 0, player.sanityMax);
+  var sRatio = player.sanity / player.sanityMax;
+  if(PostFX && PostFX.setMood) PostFX.setMood(clamp(sRatio, 0, 1));
+  if(sRatio < 0.55) staticLevel = Math.max(staticLevel, (1-sRatio)*0.22);
+  if(sRatio < 0.38 && Math.random() < dt*0.22) { try { AudioSys.whisper(); } catch(e){} }
+  if(sRatio < 0.25){
+    hbT += dt;
+    if(hbT > 1.15 - sRatio*2){ hbT = 0; try { AudioSys.heartbeat(); } catch(e){} }
+  }
+  if(player.sanity <= 0){
+    sanityBreakT += dt;
+    if(sanityBreakT >= 1){ sanityBreakT = 0; damagePlayer(3, null); showMsg('精神崩溃 · 理智耗尽', 1.2); }
+  } else sanityBreakT = 0;
   player.pos.x += vx*dt; player.pos.z += vz*dt;
   resolveCircle(player.pos, PLAYER_RADIUS, wallsByFloor[currentFloor]);
   resolveDoors(player.pos, PLAYER_RADIUS, currentFloor);
@@ -3203,7 +3273,7 @@ function updateInner(dt){
 
 function updateSpawning(dt){
   var t = elapsed;
-  var dmul = difficulty;
+  var dmul = difficulty * (1 + (night-1)*0.28);   /* 每过一夜更难 */
   var want = {
     patient: Math.round(Math.min(1 + Math.floor(t/45), 3) * dmul),
     crawler: t>35 ? Math.round(Math.min(1 + Math.floor((t-35)/70), 2) * dmul) : 0,
@@ -3248,7 +3318,7 @@ function updateMonsters(dt){
     var dist = Math.sqrt(dx*dx+dz*dz);
     mo.dist = dist;
     var sameFloor = Math.abs(player.pos.y - mo.pos.y) < 1.4;
-    var sp = t.speed * (1 + noiseLevel*0.16);   /* 动静越大，它们越亢奋 */
+    var sp = t.speed * (1 + noiseLevel*0.16) * (1 + (night-1)*0.06);
 
     var frozen = false;
     if(t.slender){
@@ -3397,6 +3467,17 @@ function updateHud(){
     elStamFill.style.width = (sr*100)+'%';
     elStamFill.className = player.exhausted ? 'empty' : (sr < 0.4 ? 'low' : '');
   }
+  /* 理智条 */
+  if(elSanityFill){
+    var snr = clamp(player.sanity/player.sanityMax, 0, 1);
+    elSanityFill.style.width = (snr*100)+'%';
+    elSanityFill.className = snr < 0.25 ? 'empty' : (snr < 0.55 ? 'low' : '');
+  }
+  if(elSanityState){
+    var snr2 = player.sanity/player.sanityMax;
+    elSanityState.textContent = snr2 >= 0.75 ? '清醒' : (snr2 >= 0.5 ? '不安' : (snr2 >= 0.25 ? '恍惚' : '崩溃边缘'));
+    elSanityState.className = snr2 >= 0.75 ? '' : (snr2 >= 0.5 ? 'warn' : 'bad');
+  }
   /* 暴露提示：安静 / 有动静 / 很显眼 */
   if(elThreat){
     var lv = noiseLevel >= 1.2 ? 2 : (noiseLevel >= 0.6 ? 1 : 0);
@@ -3408,11 +3489,20 @@ function updateHud(){
 /* ---------------- 结束 ---------------- */
 function lose(){
   gameOver = true;
+  stats.score = Math.max(0, stats.score - 10);
   showScreen('你死了','值班医生倒在了黎明前的黑暗里。', '重新值班', false);
 }
 function win(){
   gameOver = true;
-  showScreen('天亮了','06:00。第一缕晨光照进走廊，你活了下来。', '再来一夜', true);
+  night++;                       /* 通关后进入下一夜（无尽守夜） */
+  var truth = stats.notes >= 6;
+  var sub;
+  if(truth){
+    sub = '06:00。六份病历拼出了全部真相——这家医院从来没有「夜班医生」，只有一代代替换掉的守夜人。你活了下来，但你已经知道了太多。';
+  } else {
+    sub = '06:00。第一缕晨光照进走廊，你活了下来。还有 ' + (6 - stats.notes) + ' 份病历散落在黑暗里，真相仍不完整。';
+  }
+  showScreen(truth ? '真 相' : '天亮了', sub, night > 1 ? '继续守夜' : '再来一夜', true);
 }
 function showScreen(title, sub, btn, winState){
   elScreen.classList.remove('hidden');
@@ -3424,14 +3514,66 @@ function showScreen(title, sub, btn, winState){
   var d = document.createElement('div'); d.className = 'story show'; d.style.marginTop = '18px'; d.style.textAlign = 'center';
   d.textContent = sub;
   var st = document.createElement('div'); st.className = 'title-en'; st.style.marginTop = '18px'; st.style.letterSpacing = '0.3em';
-  var _sc = stats.notes*18 + Math.min(stats.kills,25)*3 + Math.round(player.hp*0.7) + (player.hp>0 ? 40 : 0);
-  var _rk = _sc >= 160 ? 'S' : (_sc >= 120 ? 'A' : (_sc >= 80 ? 'B' : 'C'));
-  st.textContent = '击杀 ' + stats.kills + ' · 病历 ' + stats.notes + '/6 · 存活 ' + Math.floor(elapsed) + ' 秒 · 评级 ' + _rk;
+  var _sc = stats.score + stats.notes*18 + Math.min(stats.kills,25)*3 + Math.round(player.hp*0.7) + (winState ? 40 : 0);
+  var _rk = _sc >= 190 ? 'S' : (_sc >= 145 ? 'A' : (_sc >= 100 ? 'B' : 'C'));
+  var _nb = saveBest(_sc, night, _rk);
+  var _best = loadBest();
+  st.textContent = '击杀 ' + stats.kills + ' · 病历 ' + stats.notes + '/6 · 存活 ' + Math.floor(elapsed) + ' 秒';
+  var st2 = document.createElement('div'); st2.className = 'title-en'; st2.style.marginTop = '9px'; st2.style.letterSpacing = '0.28em';
+  st2.textContent = '评级 ' + _rk + ' · 得分 ' + _sc + ' · 第 ' + night + ' 夜' + (_nb ? '  ★新纪录' : (' · 最佳 ' + (_best.rank||'-') + '/' + (_best.score||0)));
   var b = document.createElement('button'); b.className = 'menu-item'; b.id = 'startbtn'; b.textContent = btn;
-  wrap.appendChild(st);
+  wrap.appendChild(st); wrap.appendChild(st2);
   wrap.appendChild(en); wrap.appendChild(h); wrap.appendChild(line); wrap.appendChild(d); wrap.appendChild(b);
   elScreen.appendChild(wrap);
   b.addEventListener('pointerdown', function(e){ e.preventDefault(); location.reload(); });
+}
+
+/* ---------------- 夜班任务 ---------------- */
+function rollObjectives(){
+  objectives = [];
+  var pool = [
+    { need: 2 + Math.min(night-1, 2), label: function(o){ return '找到病历 ' + Math.min(stats.notes, o.need) + '/' + o.need; },
+      check: function(o){ return stats.notes >= o.need; } },
+    { need: 4 + night*2, label: function(o){ return '击杀怪物 ' + Math.min(stats.kills, o.need) + '/' + o.need; },
+      check: function(o){ return stats.kills >= o.need; } },
+    { need: 110 + night*15, label: function(o){ return '活过 ' + fmtClock(Math.min(elapsed, o.need)); },
+      check: function(o){ return elapsed >= o.need; } }
+  ];
+  /* 随机取 2 个不重复的任务 */
+  var i1 = randi(0, pool.length-1);
+  var i2 = (i1 + 1 + randi(0, pool.length-2)) % pool.length;
+  objectives.push(pool[i1]); objectives.push(pool[i2]);
+}
+function updateObjectives(){
+  if(!elObjectives) return;
+  var html = '';
+  for(var i=0;i<objectives.length;i++){
+    var o = objectives[i];
+    var ok = o.check(o);
+    if(ok && !o.done){
+      o.done = true;
+      stats.score += 30;
+      showMsg('任务完成 · +30 分', 2);
+      try { AudioSys.pickup(); } catch(e){}
+    }
+    html += '<div class="obj' + (ok ? ' done' : '') + '">' + (ok ? '✓ ' : '· ') + o.label(o) + '</div>';
+  }
+  elObjectives.innerHTML = html;
+}
+
+/* ---------------- 最高纪录（本地保存） ---------------- */
+function loadBest(){
+  try { return JSON.parse(localStorage.getItem('ns_best') || '{}') || {}; } catch(e){ return {}; }
+}
+function saveBest(score, n, rank){
+  try {
+    var b = loadBest();
+    if(!b.score || score > b.score){
+      localStorage.setItem('ns_best', JSON.stringify({score:score, night:n, rank:rank}));
+      return true;
+    }
+  } catch(e){}
+  return false;
 }
 
 /* ---------------- 开发者模式 ---------------- */
@@ -3569,7 +3711,7 @@ var initSteps = [
   ['正在准备 2F 实验层 …', function(){ buildFloorRooms(1, FLOOR1_ROOMS); }],
   ['正在准备 3F 天台 …',   function(){ buildRoof(2); }],
   ['正在搭建楼梯 …',       function(){ buildStairs(); }],
-  ['正在准备装备 …',       function(){ buildGunModel(0); updateWeaponHud(); elFloorLabel.textContent = FLOOR_NAMES[0]; }],
+  ['正在准备装备 …',       function(){ buildGunModel(0); updateWeaponHud(); elFloorLabel.textContent = floorLabelText(); }],
   ['就绪',                 function(){ applyQuality(); if(elLoading){ elLoading.classList.add('hidden'); setTimeout(function(){ elLoading.innerHTML = ''; }, 800); } }]
 ];
 var initIdx = 0, initFailed = false;
