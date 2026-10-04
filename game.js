@@ -2853,14 +2853,16 @@ function resetGame(){
   spawnStickPack(12.5, -13.5, 1);  // 2F 病房I
   spawnStickPack(6.2, 5.1, 2);     // 3F 天台东侧
   /* 藏身柜 */
-  spawnLocker(-9, 1.55, 0, -Math.PI/2);
-  spawnLocker(9.4, 1.55, 0, -Math.PI/2);
-  spawnLocker(1.55, -9.5, 0, 0);
-  spawnLocker(-9, 1.55, 1, -Math.PI/2);
-  spawnLocker(9.4, 1.55, 1, -Math.PI/2);
-  spawnLocker(1.55, -21.5, 1, 0);
-  spawnLocker(-11.5, -6.0, 2, 0);
-  spawnLocker(10.5, -8.0, 2, 0);
+  /* 衣柜一律背靠墙面、柜门朝向走廊（正着放） */
+  spawnLocker(-9,   1.62, 0, Math.PI);        /* 主走廊北墙 → 门朝 -Z */
+  spawnLocker(9.4,  1.62, 0, Math.PI);
+  spawnLocker(-3.5, -1.62, 0, 0);             /* 主走廊南墙 → 门朝 +Z */
+  spawnLocker(1.62, -9.5, 0, -Math.PI/2);     /* 支廊东墙 → 门朝 -X */
+  spawnLocker(-9,   1.62, 1, Math.PI);
+  spawnLocker(9.4,  1.62, 1, Math.PI);
+  spawnLocker(1.62, -21.5, 1, -Math.PI/2);
+  spawnLocker(-11.5, -6.0, 2, 0);             /* 天台，柜门朝 +Z */
+  spawnLocker(10.5,  -8.0, 2, 0);
   // 急救包分布
   spawnHealthPack(-5.1, -19.5, 0);  // 1F 护士站
   spawnHealthPack(-5.1, -13.5, 0);  // 1F 药房
