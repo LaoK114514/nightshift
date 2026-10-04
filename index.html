@@ -297,6 +297,16 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
         <span>手电</span>
       </button>
     </div>
+    <div class="btnrow">
+      <button class="rbtn" id="stickbtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <rect x="9.5" y="2.6" width="5" height="14" rx="2.2"/>
+          <path d="M7.4 6.4L4.6 5.4M16.6 6.4l2.8-1M7.4 12.6l-2.8 1M16.6 12.6l2.8 1"/>
+          <path d="M12 19.4v2.2"/>
+        </svg>
+        <span>×3</span>
+      </button>
+    </div>
     <button class="firebtn" id="fire" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
         <circle cx="12" cy="12" r="9.2"/>
@@ -346,7 +356,12 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
       <div class="ctl">换弹 —— 弹药无限，仍需手动换弹</div>
       <div class="ctl">武器 —— 霰弹枪在 1F 安保室 · 冲锋枪在 2F 药库 · 狙击枪在 3F 天台</div>
       <div class="ctl">镇静剂 —— 蓝色针剂，回满体力并获得 8 秒提速</div>
-      <div class="ctl">怪物 —— 病人 / 疯医生 / 爬行者 / 女鬼 / 八尺大人 / 瘦长鬼影</div>
+      <div class="ctl">怪物 —— 病人 / 爬行者 / 疯医生 / 女鬼 / 八尺大人 / 瘦长鬼影</div>
+      <div class="ctl">盲眼修女 —— 她看不见，只靠声音找人；安静时她几乎不动</div>
+      <div class="ctl">理智 —— 黑暗与恐惧侵蚀精神，画面会扭曲；请开灯或用镇静剂</div>
+      <div class="ctl">幻视 —— 理智过低时会看见假怪物，开枪只会浪费子弹</div>
+      <div class="ctl">荧光棒 —— 点右下按钮投出（或按 G），落地照亮并恢复理智</div>
+      <div class="ctl">突发状况 —— 停电 / 血月 / 低语 / 空投补给，随时可能发生</div>
       <div class="ctl">开门 / 锁门 —— 走近房门出现按钮，可反复开关</div>
       <div class="ctl">跑步 —— 按住「跑步」按钮（或 Shift），消耗体力</div>
       <div class="ctl">隐藏 —— 跑步声和手电光都会引来怪物，越大动静越容易被发现</div>
@@ -453,6 +468,7 @@ var elThreat = $('threat');
 var elSanityFill = $('sanityfill');
 var elSanityState = $('sanitystate');
 var elObjectives = $('objectives');
+var elStickbtn = $('stickbtn');
 var elRotate = $('rotate');
 var elScreen = $('screen'), elStartBtn = $('startbtn');
 
@@ -2135,7 +2151,7 @@ var player = {
   fireCd:0, reloading:false, reloadT:0, firing:false,
   speed:0,
   stamina:200, staminaMax:200, exhausted:false, boostT:0,
-  sanity:100, sanityMax:100, medUsed:0
+  sanity:100, sanityMax:100, medUsed:0, sticks:2
 };
 for(var wi=1; wi<WEAPONS.length; wi++){ player.weapons.push({idx:wi, mag:WEAPONS[wi].magSize}); }
 
@@ -2242,6 +2258,7 @@ function addHand(parent, x, y, z){
 var MONSTER_TYPES = {
   patient:    {hp:60,  speed:2.1, dmg:10, radius:0.45, height:1.7, halfH:0.85, atkR:1.45, atkCd:1.0},
   crawler:    {hp:45,  speed:3.3, dmg:11, radius:0.42, height:1.0, halfH:0.5,  atkR:1.25, atkCd:0.7},
+  blind:      {hp:130, speed:1.3, dmg:24, radius:0.5,  height:1.95, halfH:0.98, atkR:1.75, atkCd:1.1, blind:true},
   doctor:     {hp:90,  speed:2.7, dmg:13, radius:0.45, height:1.8, halfH:0.9,  atkR:1.5,  atkCd:0.9},
   ghost:      {hp:90,  speed:3.5, dmg:14, radius:0.5,  height:1.6, halfH:0.8,  atkR:1.55, atkCd:0.9, ghost:true},
   hachishaku: {hp:300, speed:1.5, dmg:24, radius:0.6,  height:2.6, halfH:1.3,  atkR:1.9,  atkCd:1.1},
@@ -2360,6 +2377,28 @@ function buildMonsterMesh(type){
     var shroud = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.62, 1.35, 12, 1, true), new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(shroudCanvas), transparent:true, opacity:0.72, roughness:0.9, side:THREE.DoubleSide, depthWrite:false}));
     shroud.position.y = 0.62; g.add(shroud);
     g.userData = {shroud:shroud, glowMat:glowMat};
+  } else if(type==='blind'){
+    /* 盲眼修女：黑袍 + 白头巾 + 蒙眼布 */
+    var robe = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.46, 1.5, 10), new THREE.MeshStandardMaterial({color:0x0d0e12, roughness:0.92}));
+    robe.position.y = 0.78; g.add(robe);
+    var collar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.14, 10), new THREE.MeshStandardMaterial({color:0xe6e4dc, roughness:0.8}));
+    collar.position.y = 1.5; g.add(collar);
+    var headB = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), skinM);
+    headB.position.y = 1.63; g.add(headB);
+    var coif = new THREE.Mesh(new THREE.SphereGeometry(0.175, 12, 10), new THREE.MeshStandardMaterial({color:0xeeece4, roughness:0.85}));
+    coif.position.y = 1.66; coif.scale.set(1, 1.05, 1); g.add(coif);
+    var faceB = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.22), skinM);
+    faceB.position.set(0, 1.62, 0.17); g.add(faceB);
+    var band = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.07, 0.03), new THREE.MeshStandardMaterial({color:0xd8d2c4, roughness:0.9}));
+    band.position.set(0, 1.65, 0.175); g.add(band);
+    var armBL = new THREE.Group(); armBL.position.set(-0.28, 1.4, 0);
+    m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.042, 0.62, 8), new THREE.MeshStandardMaterial({color:0x0d0e12, roughness:0.92})); m.position.y=-0.31; armBL.add(m);
+    m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), skinM); m.position.y=-0.64; armBL.add(m);
+    var armBR = armBL.clone(); armBR.position.x = 0.28;
+    g.add(armBL); g.add(armBR);
+    var rosary = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 6, 12), new THREE.MeshStandardMaterial({color:0x8a7a4a, roughness:0.4, metalness:0.6}));
+    rosary.position.set(0, 1.25, 0.26); g.add(rosary);
+    g.userData = {armL:armBL, armR:armBR, torso:robe};
   } else if(type==='crawler'){
     /* 爬行者：贴地爬行，四肢拖行 */
     var bodyC = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.3,0.66), texStd(fabricCanvas));
@@ -2721,6 +2760,10 @@ function setRunMode(v){
     if(rb) rb.textContent = runMode ? '跑动' : '跑步';
   }
 }
+if(elStickbtn) elStickbtn.addEventListener('pointerdown', function(e){
+  e.preventDefault(); e.stopPropagation();
+  throwGlowStick();
+});
 if(elRunbtn) elRunbtn.addEventListener('pointerdown', function(e){
   e.preventDefault();
   setRunMode(!runMode);
@@ -2735,7 +2778,7 @@ document.addEventListener('visibilitychange', function(){ if(document.hidden) ru
 $('weapon').addEventListener('pointerdown', function(e){ e.preventDefault(); cycleWeapon(); });
 
 var keys = {};
-document.addEventListener('keydown', function(e){ keys[e.code]=true; if(e.code==='KeyR') startReload(); if(e.code==='KeyF') toggleFlash(); });
+document.addEventListener('keydown', function(e){ keys[e.code]=true; if(e.code==='KeyR') startReload(); if(e.code==='KeyF') toggleFlash(); if(e.code==='KeyG') throwGlowStick(); });
 document.addEventListener('keyup', function(e){ keys[e.code]=false; });
 
 /* ---------------- 武器逻辑 ---------------- */
@@ -2814,6 +2857,7 @@ function fire(){
   recoil = 1;
   muzzle.material.opacity = 1; muzzle.rotation.z = rand(0,6.28);
   AudioSys.gunshot(w.pellets>1?1.5:1);
+  noisePulse = Math.max(noisePulse, w.pellets>1 ? 2.6 : 1.8);   /* 枪声会把盲眼修女引过来 */
   cameraShake = Math.min(cameraShake + (w.pellets>1?0.09:0.05), 0.2);
 
   var origin = camera.position.clone();
@@ -2859,6 +2903,12 @@ function raySphere(o,d,c,r){
 
 function killMonster(mo){
   mo.alive=false;
+  if(mo.fake){
+    /* 幻视被打散：白费子弹 */
+    showMsg('……只是个影子', 1.2);
+    try { AudioSys.whisper(); } catch(e){}
+    return;
+  }
   stats.kills++;
   stats.score += 10;
   spawnBlood(mo.pos.x, mo.pos.y+1, mo.pos.z, 16);
@@ -2895,6 +2945,11 @@ var stats = {kills:0, pickups:0, notes:0, score:0};
 var night = 1;
 var objectives = [];
 var objTimer = 0, sanityBreakT = 0, hbT = 0;
+var noisePulse = 0;                 /* 枪声引起的额外动静 */
+var eventTimer = 42, eventActive = '', eventT = 0, lastEvent = '';
+var eventSpeedMul = 1;
+var glowSticks = [];
+var lightMul = 1;
 var difficulty = 1;
 var cameraShake = 0;
 var crosshairHitTimer = 0;
@@ -2943,6 +2998,12 @@ function resetGame(){
   stats.kills = 0; stats.pickups = 0; stats.notes = 0; stats.score = 0;
   player.sanity = player.sanityMax; player.medUsed = 0;
   sanityBreakT = 0; hbT = 0; objTimer = 0;
+  for(var gs=glowSticks.length-1; gs>=0; gs--){ if(glowSticks[gs].light) scene.remove(glowSticks[gs].light); scene.remove(glowSticks[gs].m); }
+  glowSticks.length = 0;
+  player.sticks = 3; updateStickHud();
+  for(var skp=stickPacks.length-1; skp>=0; skp--){ scene.remove(stickPacks[skp].g); }
+  stickPacks.length = 0;
+  lightMul = 1; eventSpeedMul = 1; eventActive = ''; eventTimer = rand(40, 60); lastEvent = ''; noisePulse = 0;
   rollObjectives();
   if(PostFX && PostFX.setMood) PostFX.setMood(1);
   flashCharge = 1;
@@ -2972,6 +3033,9 @@ function resetGame(){
   spawnSedative(-8.5, -13.5, 1);   // 2F 病房H
   spawnSedative(12.5, 5.1, 2);     // 3F 天台东侧
   spawnSedative(-5.1, -19.5, 0);   // 1F 护士站
+  spawnStickPack(-12.5, -8.5, 0);  // 1F 病房D
+  spawnStickPack(12.5, -13.5, 1);  // 2F 病房I
+  spawnStickPack(6.2, 5.1, 2);     // 3F 天台东侧
   // 急救包分布
   spawnHealthPack(-5.1, -19.5, 0);  // 1F 护士站
   spawnHealthPack(-5.1, -13.5, 0);  // 1F 药房
@@ -3062,7 +3126,7 @@ function updateInner(dt){
   var nearestD = 999;
   for(var mi=0; mi<monsters.length; mi++){
     var mm = monsters[mi];
-    if(!mm.alive || mm.floor !== currentFloor) continue;
+    if(!mm.alive || mm.fake || mm.floor !== currentFloor) continue;
     var mdx = mm.pos.x - player.pos.x, mdz = mm.pos.z - player.pos.z;
     var mdd = Math.sqrt(mdx*mdx + mdz*mdz);
     if(mdd < nearestD) nearestD = mdd;
@@ -3085,6 +3149,35 @@ function updateInner(dt){
     sanityBreakT += dt;
     if(sanityBreakT >= 1){ sanityBreakT = 0; damagePlayer(3, null); showMsg('精神崩溃 · 理智耗尽', 1.2); }
   } else sanityBreakT = 0;
+
+  /* 枪声动静衰减 */
+  if(noisePulse > 0) noisePulse = Math.max(0, noisePulse - dt*0.7);
+
+  /* --- 幻视：理智低时出现假怪物 --- */
+  if(sRatio < 0.42 && !dev.freeze){
+    var fakeCount = 0;
+    for(var fc=0; fc<monsters.length; fc++){ if(monsters[fc].fake) fakeCount++; }
+    if(fakeCount < 3 && Math.random() < dt*(0.42 - sRatio)*0.85){
+      var fakeTypes = ['patient','crawler','doctor','ghost'];
+      var ft = fakeTypes[randi(0, fakeTypes.length-1)];
+      var ang = rand(0, 6.28), rdist = rand(9, 17);
+      var fxp = clamp(player.pos.x + Math.cos(ang)*rdist, -20.5, 16.8);
+      var fzp = clamp(player.pos.z + Math.sin(ang)*rdist, -27.6, 9.2);
+      var fmesh = buildMonsterMesh(ft);
+      fmesh.position.set(fxp, floorY(currentFloor), fzp);
+      fmesh.traverse(function(o){
+        if(o.isMesh && o.material && o.material.clone){
+          o.material = o.material.clone();
+          o.material.transparent = true; o.material.opacity = 0.88;
+        }
+      });
+      scene.add(fmesh);
+      monsters.push({type:ft, mesh:fmesh, floor:currentFloor, fake:true, life:rand(7,13),
+        pos:new THREE.Vector3(fxp, floorY(currentFloor), fzp),
+        hp:9999, alive:true, atkTimer:99, bob:rand(0,6.28), dist:99});
+      try { AudioSys.whisper(); } catch(e){}
+    }
+  }
   player.pos.x += vx*dt; player.pos.z += vz*dt;
   resolveCircle(player.pos, PLAYER_RADIUS, wallsByFloor[currentFloor]);
   resolveDoors(player.pos, PLAYER_RADIUS, currentFloor);
@@ -3231,6 +3324,9 @@ function updateInner(dt){
   updateBatteries(dt);
   updateNotes(dt);
   updateSedatives(dt);
+  updateGlowSticks(dt);
+  updateStickPacks(dt);
+  updateEvents(dt);
   if(healFlash>0){
     healFlash = Math.max(0, healFlash - dt*1.8);
     elHeal.style.opacity = healFlash*0.55;
@@ -3277,12 +3373,13 @@ function updateSpawning(dt){
   var want = {
     patient: Math.round(Math.min(1 + Math.floor(t/45), 3) * dmul),
     crawler: t>35 ? Math.round(Math.min(1 + Math.floor((t-35)/70), 2) * dmul) : 0,
+    blind: t>60 ? Math.round(Math.min(1 + Math.floor((t-60)/120), 2) * dmul) : 0,
     doctor: t>75 ? Math.round(Math.min(1 + Math.floor((t-75)/85), 2) * dmul) : 0,
     ghost: t>50 ? Math.round(Math.min(1 + Math.floor((t-50)/90), 2) * dmul) : 0,
     hachishaku: t>90 ? Math.round(1 * dmul) : 0,
     slender: t>160 ? 1 : 0
   };
-  var names = ['patient','crawler','doctor','ghost','hachishaku','slender'];
+  var names = ['patient','crawler','blind','doctor','ghost','hachishaku','slender'];
   for(var n=0;n<names.length;n++){
     var nm = names[n];
     if(spawnTimers[nm] === undefined) spawnTimers[nm] = 0;
@@ -3318,7 +3415,26 @@ function updateMonsters(dt){
     var dist = Math.sqrt(dx*dx+dz*dz);
     mo.dist = dist;
     var sameFloor = Math.abs(player.pos.y - mo.pos.y) < 1.4;
-    var sp = t.speed * (1 + noiseLevel*0.16) * (1 + (night-1)*0.06);
+    var sp = t.speed * (1 + noiseLevel*0.16) * (1 + (night-1)*0.06) * eventSpeedMul;
+    if(mo.fake){
+      /* 幻视：闪烁的假怪物，靠近就消散，不会伤害你 */
+      mo.life -= dt;
+      mo.mesh.visible = (Math.sin(mo.bob*13) > -0.6);
+      sp = t.speed * 0.3;
+      if(mo.life <= 0 || dist < 3.2){
+        scene.remove(mo.mesh);
+        monsters.splice(i, 1);
+        try { AudioSys.whisper(); } catch(e){}
+        continue;
+      }
+    }
+    if(t.blind){
+      /* 盲眼：完全靠声音定位 */
+      var loud = Math.max(noiseLevel, noisePulse);
+      sp = (loud > 0.5) ? (t.speed*3.2 + loud*0.9) : (t.speed*0.22);
+      sp *= (1 + (night-1)*0.06) * eventSpeedMul;
+      mo.heading = (loud > 0.5);
+    }
 
     var frozen = false;
     if(t.slender){
@@ -3376,7 +3492,7 @@ function updateMonsters(dt){
 
     animateLimbs(mo, dt);
 
-    if(dist < t.atkR && sameFloor && mo.atkTimer<=0){
+    if(!mo.fake && dist < t.atkR && sameFloor && mo.atkTimer<=0){
       mo.atkTimer = t.atkCd;
       damagePlayer(t.dmg, mo);
     }
@@ -3526,6 +3642,142 @@ function showScreen(title, sub, btn, winState){
   wrap.appendChild(en); wrap.appendChild(h); wrap.appendChild(line); wrap.appendChild(d); wrap.appendChild(b);
   elScreen.appendChild(wrap);
   b.addEventListener('pointerdown', function(e){ e.preventDefault(); location.reload(); });
+}
+
+/* ---------------- 荧光棒（可投掷的应急光源） ---------------- */
+function updateStickHud(){
+  if(!elStickbtn) return;
+  var sp = elStickbtn.querySelector('span');
+  if(sp) sp.textContent = '×' + player.sticks;
+  elStickbtn.classList.toggle('off', player.sticks <= 0);
+}
+function throwGlowStick(){
+  if(player.sticks <= 0){ showMsg('没有荧光棒了', 1); try{ AudioSys.empty(); }catch(e){} return; }
+  player.sticks--;
+  updateStickHud();
+  var dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  var m = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.24,8),
+    new THREE.MeshBasicMaterial({color:0xa8ff92}));
+  m.position.copy(camera.position); m.position.y -= 0.14;
+  scene.add(m);
+  glowSticks.push({m:m, light:null, active:false, t:0, life:30,
+    vx:dir.x*11, vy:dir.y*11 + 2.4, vz:dir.z*11});
+  try { AudioSys.pickup(); } catch(e){}
+  showMsg('投出荧光棒 · 剩余 ' + player.sticks, 1.2);
+}
+function updateGlowSticks(dt){
+  for(var i=glowSticks.length-1;i>=0;i--){
+    var s = glowSticks[i];
+    if(!s.active){
+      s.vy -= dt*12;
+      s.m.position.x += s.vx*dt;
+      s.m.position.y += s.vy*dt;
+      s.m.position.z += s.vz*dt;
+      s.m.rotation.x += dt*8; s.m.rotation.z += dt*6;
+      s.t += dt;
+      var gy = floorY(currentFloor) + 0.07;
+      if(s.m.position.y <= gy || s.t > 4){
+        s.m.position.y = gy;
+        s.active = true;
+        s.m.rotation.set(Math.PI/2, 0, 0);
+        var lt = new THREE.PointLight(0x8dff7a, 1.5, 10, 2);
+        lt.position.set(s.m.position.x, s.m.position.y + 0.3, s.m.position.z);
+        scene.add(lt); s.light = lt;
+      }
+    } else {
+      s.t += dt; s.life -= dt;
+      if(s.light) s.light.intensity = 1.35 + Math.sin(s.t*9)*0.25;
+      var ddx = player.pos.x - s.m.position.x, ddz = player.pos.z - s.m.position.z;
+      if(Math.sqrt(ddx*ddx + ddz*ddz) < 5.5 && Math.abs(player.pos.y - s.m.position.y) < 2.2){
+        player.sanity = Math.min(player.sanityMax, player.sanity + dt*7);
+      }
+      if(s.life <= 0){
+        if(s.light) scene.remove(s.light);
+        scene.remove(s.m);
+        glowSticks.splice(i, 1);
+      }
+    }
+  }
+}
+
+/* 荧光棒补给点 */
+var stickPacks = [];
+function spawnStickPack(x, z, f){
+  var g2 = new THREE.Group();
+  var m = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.28,0.18),
+    new THREE.MeshStandardMaterial({color:0x8dff7a, roughness:0.5, emissive:0x1f5a18}));
+  g2.add(m);
+  var glow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8),
+    new THREE.MeshBasicMaterial({color:0xa8ff92, transparent:true, opacity:0.4}));
+  glow.position.y = 0.4; g2.add(glow);
+  g2.position.set(x, floorY(f)+0.75, z);
+  scene.add(g2);
+  stickPacks.push({g:g2, glow:glow, x:x, z:z, floor:f, t:0});
+}
+function updateStickPacks(dt){
+  for(var i=stickPacks.length-1; i>=0; i--){
+    var p = stickPacks[i];
+    p.t += dt;
+    p.g.rotation.y += dt*1.8;
+    p.glow.material.opacity = 0.3 + Math.sin(p.t*3.2)*0.15;
+    if(p.floor===currentFloor && dist2(player.pos.x, player.pos.z, p.x, p.z) < 2.0){
+      player.sticks = Math.min(6, player.sticks + 1);
+      scene.remove(p.g);
+      stickPacks.splice(i, 1);
+      updateStickHud();
+      try { AudioSys.pickup(); } catch(e){}
+      showMsg('拾取荧光棒 ×1 · 共 ' + player.sticks, 1.6);
+    }
+  }
+}
+
+/* ---------------- 环境事件 ---------------- */
+function triggerEvent(){
+  var evs = ['blackout','bloodmoon','whisper','supply'];
+  var pick = evs[randi(0, evs.length-1)];
+  var tries = 0;
+  while(pick === lastEvent && tries < 8){ pick = evs[randi(0, evs.length-1)]; tries++; }
+  lastEvent = pick; eventActive = pick;
+  if(pick === 'blackout'){
+    eventT = 15; lightMul = 0.05;
+    showMsg('停电了 · 整层楼陷入黑暗', 2.6);
+    try { AudioSys.empty(); AudioSys.whisper(); } catch(e){}
+  } else if(pick === 'bloodmoon'){
+    eventT = 22; eventSpeedMul = 1.35;
+    scene.fog.color.set(0x2a0a0a);
+    showMsg('血月升起 · 它们变得狂躁', 2.6);
+    try { AudioSys.roar(); } catch(e){}
+  } else if(pick === 'whisper'){
+    eventT = 2;
+    player.sanity = Math.max(0, player.sanity - 18);
+    showMsg('无数低语钻进耳朵 · 理智 -18', 2.6);
+    try { AudioSys.whisper(); } catch(e){}
+  } else {
+    eventT = 2;
+    var ang = rand(0, 6.28), rd = rand(7, 12);
+    var sx = clamp(player.pos.x + Math.cos(ang)*rd, -19.5, 16);
+    var sz = clamp(player.pos.z + Math.sin(ang)*rd, -26.5, 8.5);
+    spawnHealthPack(sx, sz, currentFloor);
+    spawnSedative(clamp(sx + 2.5, -19.5, 16), sz, currentFloor);
+    showMsg('远处传来补给箱落地的声音', 2.6);
+    try { AudioSys.pickup(); } catch(e){}
+  }
+}
+function updateEvents(dt){
+  if(eventActive){
+    eventT -= dt;
+    if(eventT <= 0){
+      if(eventActive === 'blackout') lightMul = 1;
+      if(eventActive === 'bloodmoon'){
+        eventSpeedMul = 1;
+        scene.fog.color.set(currentFloor===FLOORS-1 ? 0x0a1424 : 0x04060c);
+      }
+      eventActive = ''; eventTimer = rand(38, 62);
+    }
+  } else {
+    eventTimer -= dt;
+    if(eventTimer <= 0) triggerEvent();
+  }
 }
 
 /* ---------------- 夜班任务 ---------------- */
@@ -3754,7 +4006,7 @@ function render(){
   for(var i=0;i<roomLights.length;i++){
     var L = roomLights[i];
     var flick = 1 + Math.sin(now*0.02+L.ph)*0.15 + (Math.random()<0.03?rand(-0.5,0.2):0);
-    L.p.intensity = Math.max(0.1, L.base*flick);
+    L.p.intensity = Math.max(0.06, L.base*flick*lightMul);
   }
   /* --- 后处理渲染（失败自动降级，避免黑屏） --- */
   if(PostFX.enabled()){
