@@ -75,6 +75,9 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 .rbtn svg { width:21px; height:21px; }
 .rbtn span { font-size:9px; letter-spacing:0.22em; color:#8f8a7c; }
 .rbtn:active { border-color:#9c342c; background:rgba(156,52,44,0.18); }
+.rbtn.off { border-color:rgba(222,217,204,0.12); background:rgba(10,11,14,0.28); }
+.rbtn.off svg { opacity:0.35; }
+.rbtn.off span { color:#57534a; }
 .firebtn {
   width:92px; height:92px; border-radius:50%;
   border:1px solid rgba(222,217,204,0.38); background:rgba(10,11,14,0.45);
@@ -206,6 +209,14 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
         </svg>
         <span>换弹</span>
       </button>
+      <button class="rbtn" id="flashbtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M8.6 2.8h6.8l-1.2 4.6H9.8L8.6 2.8z"/>
+          <path d="M10 7.4h4v11.4a2 2 0 0 1-4 0V7.4z"/>
+          <line x1="12" y1="10.6" x2="12" y2="12.6"/>
+        </svg>
+        <span>手电</span>
+      </button>
     </div>
     <button class="firebtn" id="fire" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
@@ -255,8 +266,9 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
       <div class="ctl">射击 —— 右下圆形按钮</div>
       <div class="ctl">换弹 —— 弹药无限，仍需手动换弹</div>
       <div class="ctl">换枪 —— 霰弹枪在 1F 安保室，冲锋枪在 2F 药库</div>
-      <div class="ctl">开门 —— 走近房门会出现按钮</div>
-      <div class="ctl">楼层 —— 站上楼梯口发光踏板</div>
+      <div class="ctl">开门 / 锁门 —— 走近房门出现按钮，可反复开关</div>
+      <div class="ctl">手电 —— 右下「手电」按钮，关灯省电但更危险</div>
+      <div class="ctl">楼梯 —— 走近楼梯一路走上去（走完一整段才换层）</div>
     </div>
     <div class="menu-foot">NIGHT SHIFT AT THE ASYLUM · V1.1</div>
   </div>
@@ -324,6 +336,7 @@ var elFade = $('fade');
 var elHeal = $('healflash');
 var elLoading = $('loading');
 var elFps = $('fps');
+var elFlashbtn = $('flashbtn');
 var elRotate = $('rotate');
 var elScreen = $('screen'), elStartBtn = $('startbtn');
 
@@ -1996,6 +2009,7 @@ var gunBasePos = gunGroup.position.clone();
 var gunBaseRot = gunGroup.rotation.clone();
 var recoil = 0;
 var rampTrack = { id:-1, t0:0 }, rampCooldown = 0;
+var flashOn = true;
 var magDrops = [];
 
 function buildGunModel(idx){
@@ -2460,10 +2474,24 @@ $('fire').addEventListener('pointerdown', function(e){ e.preventDefault(); playe
 $('fire').addEventListener('pointerup', function(e){ e.preventDefault(); player.firing=false; });
 $('fire').addEventListener('pointercancel', function(){ player.firing=false; });
 $('reload').addEventListener('pointerdown', function(e){ e.preventDefault(); startReload(); });
+function toggleFlash(){
+  flashOn = !flashOn;
+  flash.visible = flashOn;
+  beam.visible = flashOn;
+  flash.intensity = flashOn ? (0.9 + flashCharge*1.7) : 0;
+  if(elFlashbtn){
+    elFlashbtn.classList.toggle('off', !flashOn);
+    var lb = elFlashbtn.querySelector('span');
+    if(lb) lb.textContent = flashOn ? '手电' : '已关灯';
+  }
+  AudioSys.pickup();
+  showMsg(flashOn ? '手电已打开' : '手电已关闭（黑暗中更危险）', 1.4);
+}
+if(elFlashbtn) elFlashbtn.addEventListener('pointerdown', function(e){ e.preventDefault(); toggleFlash(); });
 $('weapon').addEventListener('pointerdown', function(e){ e.preventDefault(); cycleWeapon(); });
 
 var keys = {};
-document.addEventListener('keydown', function(e){ keys[e.code]=true; if(e.code==='KeyR') startReload(); });
+document.addEventListener('keydown', function(e){ keys[e.code]=true; if(e.code==='KeyR') startReload(); if(e.code==='KeyF') toggleFlash(); });
 document.addEventListener('keyup', function(e){ keys[e.code]=false; });
 
 /* ---------------- 武器逻辑 ---------------- */
@@ -2652,6 +2680,9 @@ function resetGame(){
   notes.length = 0;
   stats.kills = 0; stats.pickups = 0; stats.notes = 0;
   flashCharge = 1;
+  flashOn = true;
+  flash.visible = true; beam.visible = true;
+  if(elFlashbtn){ elFlashbtn.classList.remove('off'); var fb = elFlashbtn.querySelector('span'); if(fb) fb.textContent = '手电'; }
   for(var md=magDrops.length-1;md>=0;md--){ scene.remove(magDrops[md].m); }
   magDrops.length = 0;
   rampCooldown = 0; rampTrack.id = -1;
@@ -2866,12 +2897,14 @@ function updateInner(dt){
   beam.material.opacity = 0.3 + Math.sin(elapsed*47)*0.015;
   dustMat.opacity = 0.55 * flash.intensity/2.6;
 
-  /* --- 手电耗电 --- */
-  if(started && !gameOver){
+  /* --- 手电耗电：只在开灯时耗电 --- */
+  if(started && !gameOver && flashOn){
     flashCharge = Math.max(0, flashCharge - dt/100);
-    flash.intensity = 0.9 + flashCharge*1.7;
     if(flashCharge < 0.18 && Math.random() < dt*0.15) showMsg('手电快没电了 · 找电池', 1.5);
   }
+  flash.intensity = flashOn ? (0.9 + flashCharge*1.7) : 0;
+  flash.visible = flashOn;
+  beam.visible = flashOn;
 
   /* --- 急救包 & 治疗反馈 --- */
   updateHealthPacks(dt);
