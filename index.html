@@ -184,9 +184,14 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 #hidebtn:active { border-color:#9c342c; }
 #hideview {
   position:absolute; inset:0; z-index:1; display:none; pointer-events:none;
+  /* 门板做成「回」字形：中间通风口留空（透明），格栅缝隙就能看见走廊 */
   background:
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.013) 0 2px, rgba(0,0,0,0.028) 2px 6px),
-    linear-gradient(168deg, #23272e 0%, #1a1e23 28%, #121519 60%, #090b0d 100%);
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.016) 0 2px, rgba(0,0,0,0.03) 2px 6px) 0 0 / 100% 11% no-repeat,
+    linear-gradient(170deg, #272c33 0%, #1c2026 60%, #15181d 100%) 0 0 / 100% 11% no-repeat,
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.016) 0 2px, rgba(0,0,0,0.03) 2px 6px) 0 100% / 100% 25% no-repeat,
+    linear-gradient(180deg, #1a1e23 0%, #0b0d10 100%) 0 100% / 100% 25% no-repeat,
+    linear-gradient(90deg, #242931 0%, #15181d 100%) 0 0 / 13.5% 100% no-repeat,
+    linear-gradient(270deg, #242931 0%, #15181d 100%) 100% 0 / 13.5% 100% no-repeat;
 }
 #hideview.on { display:block; animation:hbreathe 4.8s ease-in-out infinite; }
 @keyframes hbreathe { 0%,100%{ opacity:.94 } 50%{ opacity:1 } }
@@ -206,7 +211,7 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 }
 /* 百叶通风板：叶子板遮光，缝隙完全透明 → 能看见走廊 */
 #hidelouver {
-  position:absolute; left:14%; right:14%; top:11%; bottom:25%;
+  position:absolute; left:13.5%; right:13.5%; top:11%; bottom:25%;
   border:3px solid #07080a; border-radius:3px;
   background: repeating-linear-gradient(180deg,
     rgba(23,27,32,0.985) 0px, rgba(23,27,32,0.985) 17px,
@@ -216,9 +221,8 @@ canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-inde
 }
 /* 门外透进来的微光/影 */
 #hideglow {
-  position:absolute; left:14%; right:14%; top:11%; bottom:25%;
-  background:linear-gradient(180deg, rgba(120,150,190,0.07), rgba(0,0,0,0.05));
-  mix-blend-mode:screen; opacity:0.6;
+  position:absolute; left:13.5%; right:13.5%; top:11%; bottom:25%;
+  background:linear-gradient(180deg, rgba(6,10,16,0.30), rgba(3,5,8,0.38));
 }
 /* 门缝：左右两侧各一条细亮线（走廊灯光从缝里透进来） */
 #hideview::after {
