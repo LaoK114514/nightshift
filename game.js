@@ -2057,10 +2057,12 @@ function buildMonsterMesh(type){
     cap.position.y = 1.69; g.add(cap);
     var armML = new THREE.Group(); armML.position.set(-0.26, 1.36, 0);
     m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.042, 0.56, 8), new THREE.MeshStandardMaterial({color:0xf2f4f5, roughness:0.85})); m.position.y = -0.28; armML.add(m);
-    var syringe = new THREE.Mesh(cy(0.028,0.028,0.22,8), new THREE.MeshStandardMaterial({color:0xd8e4ea, roughness:0.2, transparent:true, opacity:0.75}));
+    var syringe = new THREE.Mesh(cyl(0.028,0.028,0.22,8), new THREE.MeshStandardMaterial({color:0xd8e4ea, roughness:0.2, transparent:true, opacity:0.75}));
     syringe.position.set(0, -0.62, 0.06); armML.add(syringe);
-    var sTip = new THREE.Mesh(cy(0.006,0.006,0.1,6), metalMat); sTip.position.set(0, -0.76, 0.06); armML.add(sTip);
-    var armMR = armML.clone(); armMR.position.x = 0.26; armMR.children[1].visible = false; armMR.children[2].visible = false;
+    var matMetal = new THREE.MeshStandardMaterial({color:0xb8c0c8, roughness:0.3, metalness:0.85});
+    var sTip = new THREE.Mesh(cyl(0.006,0.006,0.1,6), matMetal); sTip.position.set(0, -0.76, 0.06); armML.add(sTip);
+    var armMR = armML.clone(); armMR.position.x = 0.26;
+    if(armMR.children){ for(var ci=1; ci<armMR.children.length; ci++) armMR.children[ci].visible = false; }
     g.add(armML); g.add(armMR);
     var legML = new THREE.Group(); legML.position.set(-0.12, 0.5, 0);
     m = new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.05,0.5,8), new THREE.MeshStandardMaterial({color:0xe4e7e9, roughness:0.85})); m.position.y = -0.26; legML.add(m);
@@ -2095,7 +2097,7 @@ function buildMonsterMesh(type){
     var sacHead = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), skinM); sacHead.position.set(0, 0.24, 0.22); g.add(sacHead);
     var legSets = [[-0.18,0.16],[0.18,0.16],[-0.2,-0.02],[0.2,-0.02],[-0.16,-0.2],[0.16,-0.2]];
     for(var li=0; li<legSets.length; li++){
-      var lg = new THREE.Mesh(cy(0.016,0.012,0.34,6), skinM);
+      var lg = new THREE.Mesh(cyl(0.016,0.012,0.34,6), skinM);
       lg.position.set(legSets[li][0]*1.5, 0.2, legSets[li][1]);
       lg.rotation.z = (legSets[li][0] > 0 ? -1 : 1) * 0.9;
       lg.rotation.x = (legSets[li][1] > 0 ? -0.5 : 0.5);
@@ -2137,7 +2139,7 @@ function buildMonsterMesh(type){
     m = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.22), new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(metalCanvas), roughness:0.3, metalness:0.9}));
     m.position.set(0.02, -0.66, 0.08); m.rotation.x = 0.6; armDL.add(m);  // 手术刀
     var armDR = armDL.clone(); armDR.position.x = 0.31; armDR.rotation.z = 0;
-    armDR.children[armDR.children.length-1].visible = false;
+    if(armDR.children && armDR.children.length) armDR.children[armDR.children.length-1].visible = false;
     g.add(armDL); g.add(armDR);
     var legDL = new THREE.Group(); legDL.position.set(-0.13, 0.44, 0);
     m = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.055, 0.4, 8), new THREE.MeshStandardMaterial({color:0x3a4046, roughness:0.85})); m.position.y=-0.2; legDL.add(m);
